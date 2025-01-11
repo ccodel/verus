@@ -12,6 +12,7 @@ use crate::visitor::Returner;
 use air::messages::Diagnostics;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::io::Write;
 
 fn elaborate_one_exp<D: Diagnostics + ?Sized>(
     ctx: &Ctx,
@@ -140,6 +141,62 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
                 ComputeMode::Z3 => Ok(stm.new_x(StmX::Assert(id.clone(), Some(err), interp_exp))),
                 ComputeMode::ComputeOnly => Ok(stm.new_x(StmX::Block(Arc::new(vec![])))),
             }
+        }
+        StmX::AssertLean(exp) => {
+            // Get out the inner expression, serialize it?
+
+            // CC: It appears that to interpret the expression, you need to pass a compute mode
+            //     Since lean isn't a compute mode, we can't(?) use this function
+            /*
+            let interp_exp = crate::interpreter::eval_expr(
+                &ctx.global,
+                exp,
+                diagnostics,
+                fun_ssts.clone(),
+                ctx.global.rlimit,
+                ctx.global.arch,
+                ComputeMode::Z3,
+                &mut ctx.global.interpreter_log.lock().unwrap(),
+            )?; */
+            // let res = crate::interpreter::eval_expr_internal()
+
+            // Use the unique ID from the span to disambiguate elab_one goals
+            let span_id = stm.span.id;
+
+            // TODO: Some way to uniquely identify the assert?
+            // Across two files, the IDs might clash
+            let path = std::env::current_dir().unwrap().join(
+                format!("serialized_assert_{}.json", span_id)
+            );
+
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(path)
+                .unwrap();
+
+        /*
+                   let serialized_val = serde_json::to_value(func_check_sst)
+                .expect("Failed to serialize SST to JSON");
+            let wrapped_serialized_val = serde_json::json!({
+                "FnName": func_display_name,
+                "FuncCheckSst": serialized_val,
+            });
+            let _ = writeln!(file, "{}", wrapped_serialized_val.to_string()); 
+         */
+
+            let inner_exp = exp.x.clone();
+            let inner_value = serde_json::to_value(&inner_exp).unwrap();
+            let wrapped_value = serde_json::json!({
+                "AssertId": span_id,
+                "Assert": inner_value,
+            });
+            let _ = writeln!(file, "{}", wrapped_value.to_string());
+
+            // Replace the statement with a trivial block, since we discharged
+            // the proof goals to Lean
+            Ok(stm.new_x(StmX::Block(Arc::new(vec![]))))
         }
         _ => Ok(stm.clone()),
     }

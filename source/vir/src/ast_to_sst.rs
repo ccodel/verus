@@ -1943,6 +1943,19 @@ pub(crate) fn expr_to_stm_opt(
             stms.push(assume);
             Ok((stms, ret))
         }
+        ExprX::AssertLean(exp) => {
+            // CC: Largely follow the AssertCompute branch
+            //     It seems like this is a transformation, so nothing should be exported to Lean at this point
+            state.disable_recommends += 1;
+            let (mut stms, checked_exp) = expr_to_pure_exp_check(ctx, state, &exp)?;
+            state.disable_recommends -= 1;
+            let ret = ReturnValue::ImplicitUnit(checked_exp.span.clone());
+
+            // Assume the (hopefully simplified) expression
+            let assume = Spanned::new(checked_exp.span.clone(), StmX::AssertLean(checked_exp));
+            stms.push(assume);
+            Ok((stms, ret))
+        }
         ExprX::If(expr0, expr1, None) => {
             let (stms0, e0) = expr_to_stm_opt(ctx, state, expr0)?;
             let (stms1, e1) = expr_to_stm_opt(ctx, state, expr1)?;
