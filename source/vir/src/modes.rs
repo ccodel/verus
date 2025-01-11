@@ -2690,7 +2690,8 @@ fn check_expr_handle_mut_arg(
             )?;
             Ok((Mode::Proof, Proph::No))
         }
-        ExprX::AssertCompute(e, _) => {
+        ExprX::AssertCompute(e, _) 
+        | ExprX::AssertLean(e) => {
             if ctxt.check_ghost_blocks && typing.block_ghostness == Ghost::Exec {
                 return Err(error(&expr.span, "cannot use assert in exec mode"));
             }

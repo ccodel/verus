@@ -16,15 +16,18 @@ use crate::messages::{Message, Span};
 use air::ast::{Binders, Ident};
 use std::sync::Arc;
 use vir_macros::ToDebugSNode;
+use serde::{Deserialize, Serialize};
 
 pub type Trig = Exps;
 pub type Trigs = Arc<Vec<Trig>>;
 
+#[derive(Serialize, Deserialize)]
 pub struct BndInfoUser {
     pub span: Span,
     pub trigs: Trigs,
 }
 
+#[derive(Serialize, Deserialize)]
 pub struct BndInfo {
     pub fun: Fun,
     pub user: Option<BndInfoUser>,
@@ -35,7 +38,7 @@ pub struct BndInfo {
 pub type AssertByLocals = Option<Arc<Vec<VarIdent>>>;
 
 pub type Bnd = Arc<Spanned<BndX>>;
-#[derive(Clone, Debug, ToDebugSNode)]
+#[derive(Clone, Debug, ToDebugSNode, Serialize, Deserialize)]
 pub enum BndX {
     Let(VarBinders<Exp>),
     Quant(Quant, VarBinders<Typ>, Trigs, AssertByLocals),
@@ -46,7 +49,7 @@ pub enum BndX {
 // TODO: remove UniqueIdent
 pub type UniqueIdent = VarIdent;
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq, ToDebugSNode)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, ToDebugSNode, Serialize, Deserialize)]
 pub enum InternalFun {
     ClosureReq,
     ClosureEns,
@@ -56,7 +59,7 @@ pub enum InternalFun {
     OpenInvariantMask(Fun, usize),
 }
 
-#[derive(Debug, Clone, Hash, ToDebugSNode)]
+#[derive(Debug, Clone, Hash, ToDebugSNode, Serialize, Deserialize)]
 pub enum CallFun {
     // static/method Fun, plus an optional resolved Fun for methods
     Fun(Fun, Option<(Fun, Typs)>),
@@ -66,7 +69,7 @@ pub enum CallFun {
 
 pub type Exp = Arc<SpannedTyped<ExpX>>;
 pub type Exps = Arc<Vec<Exp>>;
-#[derive(Debug, Clone, ToDebugSNode)]
+#[derive(Debug, Clone, ToDebugSNode, Serialize, Deserialize)]
 pub enum ExpX {
     /// Literal constant (integers, booleans, etc.)
     Const(Constant),
@@ -119,7 +122,7 @@ pub enum ExpX {
     FuelConst(usize),
 }
 
-#[derive(Debug, Clone, Copy, ToDebugSNode)]
+#[derive(Debug, Clone, Copy, ToDebugSNode, Serialize, Deserialize)]
 pub enum ParPurpose {
     MutPre,
     MutPost,
@@ -129,7 +132,7 @@ pub enum ParPurpose {
 /// Function parameter
 pub type Par = Arc<Spanned<ParX>>;
 pub type Pars = Arc<Vec<Par>>;
-#[derive(Debug, Clone, ToDebugSNode)]
+#[derive(Debug, Clone, ToDebugSNode, Serialize, Deserialize)]
 pub struct ParX {
     pub name: VarIdent,
     pub typ: Typ,
@@ -138,14 +141,14 @@ pub struct ParX {
     pub purpose: ParPurpose,
 }
 
-#[derive(Clone, Debug, ToDebugSNode)]
+#[derive(Clone, Debug, ToDebugSNode, Serialize, Deserialize)]
 pub struct Dest {
     pub dest: Exp,
     pub is_init: bool,
 }
 
 pub type LoopInvs = Arc<Vec<LoopInv>>;
-#[derive(Debug, Clone, ToDebugSNode)]
+#[derive(Debug, Clone, ToDebugSNode, Serialize, Deserialize)]
 pub struct LoopInv {
     // "invariant_except_break": at_entry = true, at_exit = false
     // "invariant": at_entry = true, at_exit = true
@@ -159,7 +162,7 @@ pub type AssertId = air::ast::AssertId;
 
 pub type Stm = Arc<Spanned<StmX>>;
 pub type Stms = Arc<Vec<Stm>>;
-#[derive(Debug, ToDebugSNode)]
+#[derive(Debug, ToDebugSNode, Serialize, Deserialize)]
 pub enum StmX {
     /// Call to exec/proof function (or spec function when checking preconditions).
     /// Unlike `ExpX::Call`, this has side effects and may modify state.
@@ -192,6 +195,7 @@ pub enum StmX {
     },
     /// Assertion checked by verification-time computation/interpretation
     AssertCompute(Option<AssertId>, Exp, crate::ast::ComputeMode),
+    AssertLean(Exp),
     /// Add assumption to verification context (trusted, not checked)
     Assume(Exp),
     /// Assignment to a mutable variable or location
@@ -255,7 +259,7 @@ pub enum StmX {
 }
 
 // poly.rs uses the specific kind of each local to decide on a poly/native type for the local
-#[derive(Debug, Clone, Copy, ToDebugSNode)]
+#[derive(Debug, Clone, Copy, ToDebugSNode, Serialize, Deserialize)]
 pub enum LocalDeclKind {
     Param { mutable: bool },
     Return,
@@ -279,21 +283,21 @@ pub enum LocalDeclKind {
 }
 
 pub type LocalDecl = Arc<LocalDeclX>;
-#[derive(Debug, Clone, ToDebugSNode)]
+#[derive(Debug, Clone, ToDebugSNode, Serialize, Deserialize)]
 pub struct LocalDeclX {
     pub ident: UniqueIdent,
     pub typ: Typ,
     pub kind: LocalDeclKind,
 }
 
-#[derive(Debug, Clone, ToDebugSNode)]
+#[derive(Debug, Clone, ToDebugSNode, Serialize, Deserialize)]
 pub enum UnwindSst {
     MayUnwind,
     NoUnwind,
     NoUnwindWhen(Exp),
 }
 
-#[derive(Debug, Clone, Copy, ToDebugSNode)]
+#[derive(Debug, Clone, Copy, ToDebugSNode, Serialize, Deserialize)]
 pub enum PostConditionKind {
     Ensures,
     DecreasesImplicitLemma,
@@ -301,7 +305,7 @@ pub enum PostConditionKind {
     EnsuresSafeApiCheck,
 }
 
-#[derive(Debug, Clone, ToDebugSNode)]
+#[derive(Debug, Clone, ToDebugSNode, Serialize, Deserialize)]
 pub struct PostConditionSst {
     /// Identifier that holds the return value.
     /// May be referenced by `ens_exprs` or `ens_spec_precondition_stms`.
@@ -314,7 +318,7 @@ pub struct PostConditionSst {
     pub kind: PostConditionKind,
 }
 
-#[derive(Debug, ToDebugSNode)]
+#[derive(Debug, ToDebugSNode, Serialize, Deserialize)]
 pub struct FuncDeclSst {
     pub req_inv_pars: Pars,
     pub ens_pars: Pars,
@@ -326,7 +330,7 @@ pub struct FuncDeclSst {
     pub fndef_axioms: Exps,
 }
 
-#[derive(Debug, Clone, ToDebugSNode)]
+#[derive(Debug, Clone, ToDebugSNode, Serialize, Deserialize)]
 pub struct FuncCheckSst {
     pub reqs: Exps,
     pub post_condition: Arc<PostConditionSst>,
@@ -338,20 +342,20 @@ pub struct FuncCheckSst {
     pub statics: Arc<Vec<Fun>>,
 }
 
-#[derive(Debug, Clone, ToDebugSNode)]
+#[derive(Debug, Clone, ToDebugSNode, Serialize, Deserialize)]
 pub struct FuncSpecBodySst {
     pub decrease_when: Option<Exp>,
     pub termination_check: Option<FuncCheckSst>,
     pub body_exp: Exp,
 }
 
-#[derive(Debug, Clone, ToDebugSNode)]
+#[derive(Debug, Clone, ToDebugSNode, Serialize, Deserialize)]
 pub struct FuncAxiomsSst {
     pub spec_axioms: Option<FuncSpecBodySst>,
     pub proof_exec_axioms: Option<(Pars, Exp, Trigs)>,
 }
 
-#[derive(Debug, Clone, ToDebugSNode)]
+#[derive(Debug, Clone, ToDebugSNode, Serialize, Deserialize)]
 pub struct FunctionSstHas {
     pub has_body: bool,
     pub has_requires: bool,
@@ -363,7 +367,7 @@ pub struct FunctionSstHas {
 }
 
 pub type FunctionSst = Arc<Spanned<FunctionSstX>>;
-#[derive(Debug, Clone, ToDebugSNode)]
+#[derive(Debug, Clone, ToDebugSNode, Serialize, Deserialize)]
 pub struct FunctionSstX {
     pub name: Fun,
     pub kind: crate::ast::FunctionKind,
@@ -387,7 +391,7 @@ pub struct FunctionSstX {
 }
 
 pub type KrateSst = Arc<KrateSstX>;
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct KrateSstX {
     pub functions: Vec<FunctionSst>,
     pub datatypes: Vec<crate::ast::Datatype>,

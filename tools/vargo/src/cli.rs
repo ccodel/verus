@@ -257,6 +257,8 @@ pub struct VargoParsedCli {
 pub enum VerusFeatures {
     RecordHistory,
     Singular,
+    LeanExport,
+    Lean,
 }
 
 impl std::fmt::Display for VerusFeatures {
@@ -264,6 +266,8 @@ impl std::fmt::Display for VerusFeatures {
         match self {
             VerusFeatures::RecordHistory => f.write_str("record-history"),
             VerusFeatures::Singular => f.write_str("singular"),
+            VerusFeatures::LeanExport => f.write_str("lean-export"),
+            VerusFeatures::Lean => f.write_str("lean"),
         }
     }
 }

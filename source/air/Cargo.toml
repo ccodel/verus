@@ -20,6 +20,8 @@ win32job = "1"
 
 [features]
 singular = []
+lean-export = []
+lean = []
 
 [lints]
 workspace = true

@@ -13,6 +13,7 @@ use crate::visitor::Returner;
 use air::messages::Diagnostics;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::io::Write;
 
 fn elaborate_one_exp<D: Diagnostics + ?Sized>(
     ctx: &Ctx,
@@ -170,6 +171,27 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
                 )
             })?;
             Ok(stm.new_x(StmX::AssertBitVector { requires: reqs.into(), ensures: ens.into() }))
+        }
+        StmX::AssertLean(exp) => {
+            use std::io::Write;
+            let span_id = stm.span.id;
+            let path = std::env::current_dir().unwrap().join(
+                format!("serialized_assert_{}.json", span_id)
+            );
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(path)
+                .unwrap();
+            let inner_exp = exp.x.clone();
+            let inner_value = serde_json::to_value(&inner_exp).unwrap();
+            let wrapped_value = serde_json::json!({
+                "AssertId": span_id,
+                "Assert": inner_value,
+            });
+            let _ = writeln!(file, "{}", wrapped_value.to_string());
+            Ok(stm.new_x(StmX::Block(Arc::new(vec![]))))
         }
         _ => Ok(stm.clone()),
     }
