@@ -627,6 +627,7 @@ fn make_attributes<'tcx>(
         autospec,
         atomic: vattrs.atomic,
         integer_ring: vattrs.integer_ring,
+        lean: vattrs.lean,
         is_decrease_by: vattrs.decreases_by,
         check_recommends: vattrs.check_recommends,
         nonlinear: vattrs.nonlinear,

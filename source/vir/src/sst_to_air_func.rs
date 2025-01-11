@@ -240,12 +240,14 @@ fn func_body_to_air(
     if let Some(termination_check) = termination_check {
         let (termination_commands, _snap_map) = crate::sst_to_air::body_stm_to_air(
             ctx,
+            &function.x.name,
             &function.span,
             &function.x.typ_params,
             &function.x.typ_bounds,
             pars,
             &termination_check,
             &vec![],
+            false,
             false,
             false,
             false,
@@ -393,7 +395,8 @@ fn req_ens_to_air(
         }
         for exp in specs.iter() {
             let expr_ctxt = if is_singular {
-                ExprCtxt::new_mode_singular(ExprMode::Spec, true)
+                // CC: Or here?
+                ExprCtxt::new_mode_singular(ExprMode::Spec)
             } else {
                 ExprCtxt::new_mode(ExprMode::Spec)
             };
@@ -493,6 +496,22 @@ pub fn func_name_to_air(
 }
 
 pub fn func_decl_to_air(ctx: &mut Ctx, function: &FunctionSst) -> Result<Commands, VirErr> {
+    // Just for funsies, print the serialization of the SST
+    /* 
+    let path = std::env::current_dir().unwrap().join(
+        "helloworld.json"
+    );
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(path)
+        .unwrap();
+    //let serialized_sst = serde_json::to_value(function).unwrap();
+    //let _ = writeln!(file, "Hello world");
+    let _ = serde_json::to_writer(file, function);
+    */
+
+
     let func_decl_sst = &function.x.decl;
     let (is_trait_method_impl, inherit_fn_ens) = match &function.x.kind {
         FunctionKind::TraitMethodImpl { method, trait_typ_args, .. } => {
@@ -783,8 +802,9 @@ pub fn func_axioms_to_air(
                 let forallx = ExpX::Bind(Spanned::new(span.clone(), bndx), exp.clone());
                 let forall: Arc<SpannedTyped<ExpX>> =
                     SpannedTyped::new(&span, &Arc::new(TypX::Bool), forallx);
+                // TODO: Mark a lean thing here?
                 let expr_ctxt = if is_singular {
-                    ExprCtxt::new_mode_singular(ExprMode::Spec, true)
+                    ExprCtxt::new_mode_singular(ExprMode::Spec)
                 } else {
                     ExprCtxt::new_mode(ExprMode::Spec)
                 };
@@ -820,6 +840,7 @@ pub fn func_sst_to_air(
 ) -> Result<(Arc<Vec<CommandsWithContext>>, Vec<(Span, SnapPos)>), VirErr> {
     let (commands, snap_map) = crate::sst_to_air::body_stm_to_air(
         ctx,
+        &function.x.name,
         &function.span,
         &function.x.typ_params,
         &function.x.typ_bounds,
@@ -827,6 +848,7 @@ pub fn func_sst_to_air(
         func_check_sst,
         &function.x.attrs.hidden,
         function.x.attrs.integer_ring,
+        function.x.attrs.lean,
         function.x.attrs.bit_vector,
         function.x.attrs.nonlinear,
     )?;

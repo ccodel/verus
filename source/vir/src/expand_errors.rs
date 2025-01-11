@@ -98,6 +98,7 @@ fn get_fuel_at_id(stm: &Stm, a_id: &AssertId, fuels: &mut HashMap<Fun, u32>) -> 
         | StmX::Return { assert_id, .. } => *assert_id == Some(a_id.clone()),
         StmX::AssertBitVector { requires: _, ensures: _ }
         | StmX::AssertCompute(..)
+        | StmX::AssertLean(..)
         | StmX::Assume(..)
         | StmX::Assign { .. }
         | StmX::RevealString { .. }
