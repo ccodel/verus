@@ -31,6 +31,8 @@ rust_verify_test_macros = { path = "../rust_verify_test_macros" }
 
 [features]
 singular = ["vir/singular", "air/singular"]
+lean-export = ["vir/lean-export", "air/lean-export"]
+lean = ["vir/lean", "air/lean"]
 
 [package.metadata.rust-analyzer]
 rustc_private = true

@@ -282,6 +282,8 @@ pub(crate) enum Attr {
     NonLinear,
     // verify non linear arithmetic using Singular
     IntegerRing,
+    // verify the goal(s) with Lean
+    Lean,
     // Use a new dedicated Z3 process just for this query
     SpinoffProver,
     // Use a new dedicated Z3 process for loops
@@ -517,6 +519,7 @@ pub(crate) fn parse_attrs(
                     v.push(Attr::ReturnMode(Mode::Exec))
                 }
                 AttrTree::Fun(_, arg, None) if arg == "integer_ring" => v.push(Attr::IntegerRing),
+                AttrTree::Fun(_, arg, None) if arg == "lean" => v.push(Attr::Lean),
                 AttrTree::Fun(_, arg, None) if arg == "nonlinear" => v.push(Attr::NonLinear),
                 AttrTree::Fun(_, arg, None) if arg == "spinoff_prover" => {
                     v.push(Attr::SpinoffProver)
@@ -748,6 +751,7 @@ pub(crate) fn parse_attrs(
                             "nonlinear_arith" => v.push(Attr::NonLinear),
                             "bit_vector" => v.push(Attr::BitVector),
                             "integer_ring" => v.push(Attr::IntegerRing),
+                            "lean" => v.push(Attr::Lean),
                             _ => return err_span(span, "invalid prover"),
                         }
                     }
@@ -998,6 +1002,7 @@ pub(crate) struct VerifierAttrs {
     pub(crate) auto_decreases: bool,
     pub(crate) atomic: bool,
     pub(crate) integer_ring: bool,
+    pub(crate) lean: bool,
     pub(crate) decreases_by: bool,
     pub(crate) check_recommends: bool,
     pub(crate) nonlinear: bool,
@@ -1164,6 +1169,7 @@ pub(crate) fn get_verifier_attrs_maybe_check(
         auto_decreases: false,
         atomic: false,
         integer_ring: false,
+        lean: false,
         decreases_by: false,
         check_recommends: false,
         nonlinear: false,
@@ -1243,6 +1249,7 @@ pub(crate) fn get_verifier_attrs_maybe_check(
             Attr::AutoDecreases => vs.auto_decreases = true,
             Attr::Atomic => vs.atomic = true,
             Attr::IntegerRing => vs.integer_ring = true,
+            Attr::Lean => vs.lean = true,
             Attr::DecreasesBy => vs.decreases_by = true,
             Attr::CheckRecommends => vs.check_recommends = true,
             Attr::NonLinear => vs.nonlinear = true,

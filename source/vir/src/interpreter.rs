@@ -32,6 +32,7 @@ use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::thread;
 use vir_macros::ToDebugSNode;
+use serde::{Deserialize, Serialize};
 
 // An approximation of how many interpreter invocations we can do in 1 second (in release mode)
 const RLIMIT_MULTIPLIER: u64 = 400_000;
@@ -168,7 +169,7 @@ struct Ctx<'a> {
 }
 
 /// Interpreter-internal expressions
-#[derive(Debug, Clone, ToDebugSNode)]
+#[derive(Debug, Clone, ToDebugSNode, Serialize, Deserialize)]
 pub enum InterpExp {
     /// Track free variables (those not introduced inside an assert_by_compute),
     /// so they don't get confused with bound variables.

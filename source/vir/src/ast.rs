@@ -847,6 +847,7 @@ pub enum ExprX {
     AssertQuery { requires: Exprs, ensures: Exprs, proof: Expr, mode: AssertQueryMode },
     /// Assertion discharged via computation
     AssertCompute(Expr, ComputeMode),
+    AssertLean(Expr),
     /// If-else
     If(Expr, Expr, Option<Expr>),
     /// Match (Note: ast_simplify replaces Match with other expressions)
@@ -994,6 +995,8 @@ pub struct FunctionAttrsX {
     pub atomic: bool,
     /// Verify non_linear arithmetic using Singular
     pub integer_ring: bool,
+    /// Verify goal using Lean
+    pub lean: bool,
     /// This is a proof of termination for another spec function
     pub is_decrease_by: bool,
     /// In a spec function, check the body for violations of recommends

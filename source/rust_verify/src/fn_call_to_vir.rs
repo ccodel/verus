@@ -1094,6 +1094,39 @@ fn verus_item_to_vir<'tcx, 'a>(
                         mode: AssertQueryMode::BitVector,
                     })
                 }
+                AssertItem::AssertLean => {
+                    unsupported_err_unless!(
+                        args_len == 1,
+                        expr.span,
+                        "expected assert_by_compute",
+                        &args
+                    );
+                    let exp = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
+                    mk_expr(ExprX::AssertLean(exp))
+
+                    // CC: We don't want to add Lean as a QueryMode,
+                    //     We instead add AssertLean to `ExprX`
+                    /*
+                    let vir_expr = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
+                    let requires = Arc::new(vec![bctx.spanned_typed_new(
+                        expr.span,
+                        &Arc::new(TypX::Bool),
+                        ExprX::Const(Constant::Bool(true)),
+                    )]);
+                    let ensures = Arc::new(vec![vir_expr]);
+                    let proof = bctx.spanned_typed_new(
+                        expr.span,
+                        &unit_typ(),
+                        ExprX::Block(Arc::new(vec![]), None),
+                    );
+                    mk_expr(ExprX::AssertQuery {
+                        requires,
+                        ensures,
+                        proof,
+                        mode: AssertQueryMode::ByLean,
+                    })
+                    */
+                }
             }
         }
         VerusItem::UseTypeInvariant => {

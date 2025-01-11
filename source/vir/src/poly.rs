@@ -817,6 +817,7 @@ fn visit_stm(ctx: &Ctx, state: &mut State, stm: &Stm) -> Stm {
             })
         }
         StmX::AssertCompute(..) => panic!("AssertCompute should be removed by sst_elaborate"),
+        StmX::AssertLean(..) => panic!("AssertLean should be removed by sst_elaborate"),
         StmX::Assume(e1) => {
             let e1 = visit_exp_native(ctx, state, e1);
             mk_stm(StmX::Assume(e1))
