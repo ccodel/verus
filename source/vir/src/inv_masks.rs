@@ -2,6 +2,7 @@ use crate::messages::{error, error_with_label, Span};
 use air::ast::{Expr, Stmt, StmtX};
 use air::ast_util::{mk_eq, mk_false, mk_not, mk_or};
 use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 
 /// This is where we handle VCs to ensure that the same invariant is not opened
 /// more than once at a time when the user opens nested invariants.
@@ -16,7 +17,7 @@ use std::sync::Arc;
 /// respectively.
 ///
 /// During SST -> AIR conversion, we track the mask set (in terms of AIR expressions) at each
-/// point and generate the approriate VCs. (See sst_to_air.rs). For example:
+/// point and generate the appropriate VCs. (See sst_to_air.rs). For example:
 ///
 ///   // MASK SET: T
 ///   open_invariant!(&i => inner => {      // VC:    i.namespace() !in T
@@ -34,19 +35,19 @@ use std::sync::Arc;
 /// Also note that this is designed to not generate ANY extra VCs in the common case
 /// (fns that have default specifications, and no open_invariant statements).
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SetBase {
     Full,
     Empty,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MaskSingleton<E> {
     pub expr: E,
     pub span: Span,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MaskSetE<E> {
     pub base: SetBase,
     pub plus: Vec<MaskSingleton<E>>,

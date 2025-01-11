@@ -709,6 +709,7 @@ pub enum ProverChoice {
     Nonlinear,
     BitVector,
     Singular,
+    Lean,
 }
 
 #[derive(Clone, Debug)]
