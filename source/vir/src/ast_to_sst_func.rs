@@ -396,6 +396,7 @@ pub fn func_axioms_to_sst(
     match function.x.mode {
         Mode::Spec => {
             // Body
+            // print!("function.x.name: {:?}", function.x.name);
             if public_body {
                 if let Some(body) = &function.x.body {
                     let func_spec_body = func_body_to_sst(
