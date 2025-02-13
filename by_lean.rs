@@ -6,6 +6,10 @@ spec fn add_one(i: int) -> int {
   i + 1
 }
 
+spec fn add(x: int, y: int) -> int {
+  x + y
+}
+
 // proof fn test_this(i: int) {
   // assert(i != i + 1);
   // assert(forall|x:int| x != #[trigger] (x + 1)) by (lean);
@@ -21,7 +25,11 @@ spec fn add_one(i: int) -> int {
 // }
 
 proof fn assert_add_one(x: int) {
-  assert(add_one(x) == x + 1) by (lean);
+  assert(add_one(x) + 1 == x + 2) by (lean);
+}
+
+proof fn assert_add(x: int, y: int) {
+  assert(add(x, y) == x + y) by (lean);
 }
 
 // proof fn assert_forall() {
