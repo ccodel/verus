@@ -187,7 +187,6 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
                 .unwrap();
 
             accumulate_fun_objects(&exp.x, fun_accumulator);
-            println!("fun_accumulator: {:?}", fun_accumulator);
             let mut accumulated_values = Vec::new();
             for col in fun_accumulator.iter() {
                 let col_sst = fun_ssts.get(col).unwrap();
