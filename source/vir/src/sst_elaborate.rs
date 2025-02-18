@@ -195,7 +195,7 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
 
             // Accumulate Fun objects from inner_exp
             accumulate_fun_objects(&exp.x, fun_accumulator);
-            println!("fun_accumulator: {:?}", fun_accumulator);
+            // println!("fun_accumulator: {:?}", fun_accumulator);
             // let accumulated_strings: Vec<String> = fun_accumulator.iter()
             //     .map(|col_value| col_value).collect();
             let mut accumulated_values = Vec::new();
