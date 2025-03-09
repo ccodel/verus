@@ -3,7 +3,7 @@ use vstd::prelude::*;
 verus! {
 
 proof fn assert_forall(i: int) {
-  assert(i != i + 1);
+  assert(i != i + 1) by (lean);
   assert(forall|x:int| x != #[trigger] (x + 1)) by (lean);
   assert(forall|x:int, y:nat| x + y == #[trigger] (y + x)) by (lean);
   assert(forall|x:int, y:nat| x + y != #[trigger] (x + y + 1)) by (lean);
