@@ -8,6 +8,11 @@ fn empty_raw_span() -> RawSpan {
     Arc::new(())
 }
 
+#[cfg(any(feature = "lean", feature = "lean-export"))]
+pub fn empty_span() -> Span {
+    Span { raw_span: Arc::new(()), id: 0, data: Vec::new(), as_string: "".to_owned() }
+}
+
 pub type RawSpan =
     Arc<dyn std::any::Any + std::marker::Sync + std::marker::Send + std::panic::RefUnwindSafe>;
 pub type AstId = u64;
