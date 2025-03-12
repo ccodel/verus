@@ -190,8 +190,14 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
             let mut accumulated_values = Vec::new();
             for col in fun_accumulator.iter() {
                 let col_sst = fun_ssts.get(col).unwrap();
-                let col_value = serde_json::to_value(&col_sst).unwrap();
+                let col_value = serde_json::to_value(&col_sst.x).unwrap();
                 accumulated_values.push(col_value);
+            }
+
+            let mut datatype_values = Vec::new();
+            for dt in ctx.datatype_map.values() {
+                let dt_value = serde_json::to_value(&dt.x).unwrap();
+                datatype_values.push(dt_value);
             }
 
             let inner_exp = exp.x.clone();
@@ -199,6 +205,7 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
 
             let top_level = serde_json::json!({
                 "SpecFns": accumulated_values,
+                "Datatypes": datatype_values,
                 "PriorAsserts": [],
                 "AssertId": span_id,
                 "Assert": inner_value,
