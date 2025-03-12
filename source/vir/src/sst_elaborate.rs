@@ -201,7 +201,7 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
             let mut accumulated_values = Vec::new();
             for col in fun_accumulator.iter() {
                 let col_sst = fun_ssts.get(col).unwrap();
-                let col_value = serde_json::to_value(&col_sst).unwrap();
+                let col_value = serde_json::to_value(&col_sst.x).unwrap();
                 // println!("col_value: {:?}", col_value);
                 accumulated_values.push(col_value);
                 // let _ = writeln!(file, "{}", col_value.to_string());
@@ -211,6 +211,12 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
                 // let col_value1 = serde_json::to_value(&col_sst1).unwrap();
                 // println!("col_value1: {:?}", col_value1);
                 // let _ = writeln!(file, "{}", col_value1.to_string());
+            }
+
+            let mut datatype_values = Vec::new();
+            for dt in ctx.datatype_map.values() {
+                let dt_value = serde_json::to_value(&dt.x).unwrap();
+                datatype_values.push(dt_value);
             }
 
             let inner_exp = exp.x.clone();
@@ -223,6 +229,7 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
 
             let top_level = serde_json::json!({
                 "SpecFns": accumulated_values, // list of serialized spec function bodies
+                "Datatypes": datatype_values, // list of serialized datatypes
                 "PriorAsserts": [], // list of prior assertions
                 "AssertId": span_id,
                 "Assert": inner_value,
