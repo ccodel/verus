@@ -34,6 +34,9 @@ use air::scope_map::ScopeMap;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+#[cfg(any(feature = "lean-export", feature = "lean"))]
+use crate::ast::DtType;
+
 struct State {
     // Counter to generate temporary variables
     next_var: u64,
@@ -1446,6 +1449,8 @@ pub fn simplify_krate(ctx: &mut GlobalCtx, krate: &Krate) -> Result<Krate, VirEr
         let variants = Arc::new(vec![variant]);
         let datatypex = DatatypeX {
             name: Dt::Tuple(arity),
+            #[cfg(any(feature = "lean-export", feature = "lean"))]
+            dt_type: DtType::Tuple,
             proxy: None,
             visibility,
             owning_module: None,
@@ -1504,6 +1509,8 @@ pub fn simplify_krate(ctx: &mut GlobalCtx, krate: &Krate) -> Result<Krate, VirEr
 
         let datatypex = DatatypeX {
             name: Dt::Path(path),
+            #[cfg(any(feature = "lean-export", feature = "lean"))]
+            dt_type: DtType::Closure,
             proxy: None,
             visibility,
             owning_module: None,
