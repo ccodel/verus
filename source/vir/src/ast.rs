@@ -1210,10 +1210,24 @@ pub enum Dt {
     Tuple(usize),
 }
 
+#[cfg_attr(any(feature = "lean", feature = "lean-export"),
+    derive(Clone, Debug, Serialize, Deserialize, ToDebugSNode, Hash, PartialEq, Eq))]
+#[cfg(any(feature = "lean", feature = "lean-export"))]
+pub enum DtType {
+    Struct,
+    Enum,
+    Union,
+    Tuple,    // `n`-arity products. The arity is stored in `Dt`
+    Closure,  // See the note in `simplify_crate()` in vir/src/ast_simplify.rs
+    External, // CC: I think this means they call out to Rust std library?
+}
+
 /// struct or enum
 #[derive(Clone, Debug, Serialize, Deserialize, ToDebugSNode)]
 pub struct DatatypeX {
     pub name: Dt,
+    #[cfg(any(feature = "lean-export", feature = "lean"))]
+    pub dt_type: DtType,
     /// Similar to FunctionX proxy field.
     /// If this datatype is declared via a proxy (a type labeled external_type_specification)
     /// then this points to the proxy.
