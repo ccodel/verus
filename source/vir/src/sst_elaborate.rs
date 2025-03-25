@@ -244,7 +244,7 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
     }
 }
 
-fn accumulate_fun_objects(exp: &ExpX, fun_accumulator: &mut HashSet<Fun>) {
+pub(crate) fn accumulate_fun_objects(exp: &ExpX, fun_accumulator: &mut HashSet<Fun>) {
     // println!("accumulating fun objects, exp={:?}", exp);
     match exp {
         ExpX::Call(CallFun::Fun(fun, _), _, _) => {
