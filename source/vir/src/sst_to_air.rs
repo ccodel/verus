@@ -29,6 +29,7 @@ use crate::sst::{
     UnwindSst,
 };
 use crate::sst::{FuncCheckSst, Pars, PostConditionKind, Stms};
+use crate::sst_elaborate::accumulate_fun_objects;
 use crate::sst_util::subst_typ_for_datatype;
 use crate::sst_vars::{AssignMap, get_loc_var};
 use crate::util::{vec_map, vec_map_result};
@@ -3003,7 +3004,30 @@ pub(crate) fn body_stm_to_air(
 
             let serialized_val = serde_json::to_value(func_check_sst)
                 .expect("Failed to serialize SST to JSON");
+
+            let fun_accumulator: &mut HashSet<Fun> = &mut HashSet::new();
+            for req in reqs.iter() {
+                accumulate_fun_objects(&req.x, fun_accumulator);
+            }
+            for ens in post_condition.ens_exps.iter() {
+                accumulate_fun_objects(&ens.x, fun_accumulator);
+            }
+            let mut spec_fns = Vec::new();
+            for col in fun_accumulator.iter() {
+                let col_sst = ctx.func_sst_map.get(col).unwrap();
+                let col_value = serde_json::to_value(&col_sst.x).unwrap();
+                spec_fns.push(col_value);
+            }
+            
+            let mut datatype_values = Vec::new();
+            for dt in ctx.datatype_map.values() {
+                let dt_value = serde_json::to_value(&dt.x).unwrap();
+                datatype_values.push(dt_value);
+            }
+
             let wrapped_serialized_val = serde_json::json!({
+                "SpecFns": spec_fns,
+                "Datatypes": datatype_values,
                 "FnName": func_display_name,
                 "FuncCheckSst": serialized_val,
             });
