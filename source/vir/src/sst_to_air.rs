@@ -29,7 +29,6 @@ use crate::sst::{
     UnwindSst,
 };
 use crate::sst::{FuncCheckSst, Pars, PostConditionKind, Stms};
-use crate::sst_elaborate::accumulate_fun_objects;
 use crate::sst_util::subst_typ_for_datatype;
 use crate::sst_vars::{get_loc_var, AssignMap};
 use crate::util::{vec_map, vec_map_result};
@@ -47,7 +46,6 @@ use num_bigint::BigInt;
 use std::collections::{BTreeMap, HashSet};
 use std::mem::swap;
 use std::sync::Arc;
-use std::io::Write;
 
 pub struct PostConditionInfo {
     /// Identifier that holds the return value.
@@ -1820,8 +1818,16 @@ fn stm_to_stmts(ctx: &Ctx, state: &mut State, stm: &Stm) -> Result<Vec<Stmt>, Vi
         StmX::AssertCompute(..) => {
             panic!("AssertCompute should be removed by sst_elaborate")
         }
-        StmX::AssertLean(..) => {
-            panic!("AssertLean should be removed by sst_elaborate")
+        StmX::AssertLean(_expr) => {
+            // If we *don't* have Lean compilations turned on, throw an error
+            #[cfg(not(any(feature = "lean", feature = "lean-export")))]
+            { panic!("AssertLean should be removed by sst_elaborate") }
+            
+            // If we *do* have Lean compilations turned on, `Assume` it
+            // This is okay to do because this function gets called after Lean serialization
+            // (This `Assume` node gets interpreted as an axiom in the SMT formula)
+            #[cfg(any(feature = "lean", feature = "lean-export"))]
+            { vec![Arc::new(StmtX::Assume(exp_to_expr(ctx, &_expr, expr_ctxt)?))] }
         }
         StmX::Return { base_error, ret_exp, inside_body, assert_id } => {
             let skip = if ctx.checking_spec_preconditions() {
@@ -2625,7 +2631,6 @@ fn mk_static_prelude(ctx: &Ctx, statics: &Vec<Fun>) -> Vec<Stmt> {
 
 pub(crate) fn body_stm_to_air(
     ctx: &Ctx,
-    func_name: &Fun, // This might be a duplicate?
     func_span: &Span,
     typ_params: &Idents,
     typ_bounds: &crate::ast::GenericBounds,
@@ -2860,126 +2865,14 @@ pub(crate) fn body_stm_to_air(
             ));
         }
     } else if is_lean {
-        // Now export the SST to a new tempfile
-        // CC: For now, use helloworld.json
-        // CC: Depends on whether `lean` or `lean-export` is used? 
-
-        // If "lean-export" is provided, then we export a serlialized version
-        // of the function's SST to a JSON file. We then do *NOT* add a Command
-        // to `state.commands`, as we assume here that the Lean obligations
-        // will be correctly discharged.
-        //#[cfg(feature = "lean-export")]
-        //{
-
-            // Get some name for the function
-            // For now, the last element of its krate/segments
-
-            // Hmm this implementation doesn't work...
-            let func_display_name = func_name.path.segments.last().unwrap();
-            let path = std::env::current_dir().unwrap().join(
-                format!("serialized_fn_{}.json", func_display_name)
-            );
-
-            let mut file = std::fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(path)
-                .unwrap();
-
-            let serialized_val = serde_json::to_value(func_check_sst)
-                .expect("Failed to serialize SST to JSON");
-
-            let fun_accumulator: &mut HashSet<Fun> = &mut HashSet::new();
-            for req in reqs.iter() {
-                accumulate_fun_objects(&req.x, fun_accumulator);
-            }
-            for ens in post_condition.ens_exps.iter() {
-                accumulate_fun_objects(&ens.x, fun_accumulator);
-            }
-            let mut spec_fns = Vec::new();
-            for col in fun_accumulator.iter() {
-                let col_sst = ctx.func_sst_map.get(col).unwrap();
-                let col_value = serde_json::to_value(&col_sst.x).unwrap();
-                spec_fns.push(col_value);
-            }
-            
-            let mut datatype_values = Vec::new();
-            for dt in ctx.datatype_map.values() {
-                let dt_value = serde_json::to_value(&dt.x).unwrap();
-                datatype_values.push(dt_value);
-            }
-
-            let wrapped_serialized_val = serde_json::json!({
-                "SpecFns": spec_fns,
-                "Datatypes": datatype_values,
-                "FnName": func_display_name,
-                "FuncCheckSst": serialized_val,
-            });
-            let _ = writeln!(file, "{}", wrapped_serialized_val.to_string());
-            // let _ = serde_json::to_writer(file, &wrapped_serialized_val);
-        //}
-        
-
-        // If "lean" is provided, then we add a Command to `state.commands`
-        // to verify that the Lean proofs are correct.
-        // CC: Still hash the serialization to ensure that the statement is
-        //     correct?
-        #[cfg(feature = "lean")]
-        {
-
+        // If we don't have Lean compilation options turned on, throw an error
+        #[cfg(not(any(feature = "lean", feature = "lean-export")))] {
+            let err = error_with_label(
+                &func_span,
+                "assertion failed",
+                "To enable \"by (lean)\", compile Verus with \"--features lean\"");
+            return Err(err);
         }
-
-        /*
-        let f: crate::vlir::Theorem = crate::vlir::Theorem {
-            name: path.clone().into(),
-            typ_params: typ_params.clone(),
-            params: crate::vlir::params(params.clone()).map_err(crate::messages::error_bare)?,
-            require: reqs.clone().try_into().map_err(crate::messages::error_bare)?,
-            ensure: Arc::new(post_condition.ens_exps.clone()).try_into().map_err(crate::messages::error_bare)?,
-        };
-        let path = std::env::current_dir().unwrap().join(
-            format!("{}.json",
-                path.krate.iter().chain(path.segments.iter())
-                    .map(|x| x.as_ref().as_str()).collect::<Vec<&str>>().join("_")));
-        let file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .unwrap();
-
-        let _ = serde_json::to_writer_pretty(file, &f);
-        //if is_lean {
-            let path = ctx.fun.as_ref().map(|x| x.current_fun.path.clone()).expect("lean call not in function context");
-            let path: PathX = (*path.as_ref()).clone();
-            let path = PathX {
-                krate: path.krate,
-                segments: {
-                    //let mut orig = (*path.segments.as_ref()).clone();
-                    let orig = (*path.segments.as_ref()).clone();
-                    //orig.push(rand::random::<u16>().to_string().into());
-                    orig.into()
-                },
-            };
-
-            let path = std::env::current_dir().unwrap().join(
-                format!("{}.json",
-                    path.krate.iter().chain(path.segments.iter())
-                        .map(|x| x.as_ref().as_str()).collect::<Vec<&str>>().join("_")));
-
-            /*
-            let mut file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(path)
-                .unwrap();
-            */
-
-            //let _ = writeln!(file, "Hello world");
-            //drop(file);
-            // let _ = println!("Would have written to {}", path.display());
-            //}
-        */
     } else {
         let query = Arc::new(QueryX { local: Arc::new(local), assertion });
         let commands = if is_nonlinear {

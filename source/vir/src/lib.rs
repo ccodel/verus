@@ -75,3 +75,9 @@ pub mod user_defined_type_invariants;
 pub mod util;
 mod visitor;
 pub mod well_formed;
+// CC: Marking this as #[cfg] keeps the file from appearing during compilation
+// CC: This can reduce the size of the binary,
+//     and it ensures that Lean options are orthogonal to the rest of Verus
+// CC: However, to enable type checking functionality in VS Code, we keep this commented out
+// #[cfg(any(feature = "lean", feature = "lean-export"))]
+pub mod sst_to_lean;

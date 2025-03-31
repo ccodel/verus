@@ -43,6 +43,9 @@ use vir::def::{
 };
 use vir::prelude::PreludeConfig;
 
+#[cfg(any(feature = "lean", feature = "lean-export"))]
+use vir::sst_to_lean::serialize_crate_for_lean;
+
 const RLIMIT_PER_SECOND: f32 = 3000000f32;
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -1982,6 +1985,11 @@ impl Verifier {
         let VerifyBucketOut { time_smt_init, time_smt_run, rlimit_count } =
             self.verify_bucket(reporter, &krate_sst, source_map, bucket_id, &mut ctx)?;
 
+        // Export crate code to a JSON serialization for Lean
+        // This function only produces a serialization if the file contains a `by (lean)`
+        #[cfg(any(feature = "lean", feature = "lean-export"))]
+        serialize_crate_for_lean(&ctx, &krate_sst);
+
         global_ctx = ctx.free();
 
         let time_verify_end = Instant::now();
@@ -2041,6 +2049,56 @@ impl Verifier {
         )?;
         vir::recursive_types::check_traits(&krate, &global_ctx)?;
         let krate = vir::ast_simplify::simplify_krate(&mut global_ctx, &krate)?;
+
+        /*
+            CC: Added functionality. This is where James' edits for outputting
+            serialized ASTs went.
+
+        */
+
+
+        /* 
+        // println!("Crate {} has {} functions", crate_name, krate.functions.len());
+        println!("Crate has {} functions", krate.functions.len());
+        let path = std::env::current_dir().unwrap().join("serialization.lean");
+        println!("Exporting Lean to {:?}", path);
+        let mut file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(path)
+            .unwrap();
+
+        let _ = writeln!(file, "import VerusLean.VerusBuiltins");
+
+        for scc in global_ctx.func_call_sccs.iter() {
+            let nodes = global_ctx.func_call_graph.get_scc_nodes(scc);
+            /*if nodes.len() > 1 {
+                let _ = writeln!(file, "mutual");
+            } */
+            for node in nodes.iter() {
+                match node {
+                    vir::recursion::Node::Fun(f) => {
+                        if f.path.segments.first().is_some_and(|s| (**s) == "arithmetic") {
+                            println!("processing fn: {:?}", f.path);
+                            let _ = writeln!(file, "{:?}", f.path);
+                            /*for f in krate.functions.iter()
+                                    .find(|f2| (*f2.x.name.path) == (*f.path))
+                                    .iter() {
+                                writeln!(file, "{}", f.path);
+                            } */
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            /*if nodes.len() > 1 {
+                let _ = writeln!(file, "end");
+            } */
+        }
+
+        drop(file);
+        */
 
         if self.args.log_all || self.args.log_args.log_vir_simple {
             let mut file = self.create_log_file(None, crate::config::VIR_SIMPLE_FILE_SUFFIX)?;
