@@ -11,9 +11,8 @@ use crate::triggers::build_triggers;
 use crate::util::vec_map_result;
 use crate::visitor::Returner;
 use air::messages::Diagnostics;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::io::Write;
 
 fn elaborate_one_exp<D: Diagnostics + ?Sized>(
     ctx: &Ctx,
@@ -119,7 +118,6 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
     diagnostics: &D,
     fun_ssts: &SstMap,
     stm: &Stm,
-    fun_accumulator: &mut HashSet<Fun>,
 ) -> Result<Stm, VirErr> {
     match &stm.x {
         StmX::AssertCompute(id, exp, compute) => {
@@ -173,73 +171,15 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
             })?;
             Ok(stm.new_x(StmX::AssertBitVector { requires: reqs.into(), ensures: ens.into() }))
         }
+        #[cfg(not(any(feature = "lean", feature = "lean-export")))]
         StmX::AssertLean(exp) => {
-            use std::io::Write;
-            let span_id = stm.span.id;
-            let path = std::env::current_dir().unwrap().join(
-                format!("serialized_assert_{}.json", span_id)
-            );
-            let mut file = std::fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(path)
-                .unwrap();
-
-            accumulate_fun_objects(&exp.x, fun_accumulator);
-            let mut accumulated_values = Vec::new();
-            for col in fun_accumulator.iter() {
-                let col_sst = fun_ssts.get(col).unwrap();
-                let col_value = serde_json::to_value(&col_sst.x).unwrap();
-                accumulated_values.push(col_value);
-            }
-
-            let mut datatype_values = Vec::new();
-            for dt in ctx.datatype_map.values() {
-                let dt_value = serde_json::to_value(&dt.x).unwrap();
-                datatype_values.push(dt_value);
-            }
-
-            let inner_exp = exp.x.clone();
-            let inner_value = serde_json::to_value(&inner_exp).unwrap();
-
-            let top_level = serde_json::json!({
-                "SpecFns": accumulated_values,
-                "Datatypes": datatype_values,
-                "PriorAsserts": [],
-                "AssertId": span_id,
-                "Assert": inner_value,
-            });
-            let _ = writeln!(file, "{}", top_level.to_string());
-
-            Ok(stm.new_x(StmX::Block(Arc::new(vec![]))))
+            let err = error_with_label(
+                &exp.span.clone(),
+                "assertion failed",
+                "To enable \"by (lean)\", compile Verus with \"--features lean\"");
+            Err(err)
         }
         _ => Ok(stm.clone()),
-    }
-}
-
-pub(crate) fn accumulate_fun_objects(exp: &ExpX, fun_accumulator: &mut HashSet<Fun>) {
-    // println!("accumulating fun objects, exp={:?}", exp);
-    match exp {
-        ExpX::Call(CallFun::Fun(fun, _), _, _) => {
-            fun_accumulator.insert(fun.clone());
-        }
-        ExpX::Bind(_, body) => {
-            accumulate_fun_objects(&body.x, fun_accumulator);
-        }
-        ExpX::Unary(_, e) => {
-            accumulate_fun_objects(&e.x, fun_accumulator);
-        }
-        ExpX::Binary(_, e1, e2) => {
-            accumulate_fun_objects(&e1.x, fun_accumulator);
-            accumulate_fun_objects(&e2.x, fun_accumulator);
-        }
-        ExpX::If(e1, e2, e3) => {
-            accumulate_fun_objects(&e1.x, fun_accumulator);
-            accumulate_fun_objects(&e2.x, fun_accumulator);
-            accumulate_fun_objects(&e3.x, fun_accumulator);
-        }
-        _ => {}
     }
 }
 
@@ -303,13 +243,12 @@ struct ElaborateVisitor2<'a, 'b, D: Diagnostics> {
     ctx: &'a Ctx,
     diagnostics: &'b D,
     fun_ssts: SstMap,
-    fun_accumulator: HashSet<Fun>,
 }
 
 impl<'a, 'b, D: Diagnostics> Visitor<Rewrite, VirErr, NoScoper> for ElaborateVisitor2<'a, 'b, D> {
     fn visit_stm(&mut self, stm: &Stm) -> Result<Stm, VirErr> {
         let stm = self.visit_stm_rec(stm)?;
-        elaborate_one_stm(self.ctx, self.diagnostics, &self.fun_ssts, &stm, &mut self.fun_accumulator)
+        elaborate_one_stm(self.ctx, self.diagnostics, &self.fun_ssts, &stm )
     }
 }
 
@@ -350,7 +289,7 @@ pub(crate) fn elaborate_function_rewrite_recursive<'a, 'b, D: Diagnostics>(
     fun_ssts: SstMap,
     function: &mut FunctionSst,
 ) -> Result<(), VirErr> {
-    let mut visitor = ElaborateVisitor2 { ctx, diagnostics, fun_ssts, fun_accumulator: HashSet::new() };
+    let mut visitor = ElaborateVisitor2 { ctx, diagnostics, fun_ssts };
     *function = visitor.visit_function(function)?;
 
     if function.x.has.is_recursive && function.x.mode == Mode::Spec {
