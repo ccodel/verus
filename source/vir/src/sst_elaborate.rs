@@ -10,9 +10,8 @@ use crate::sst_visitor::{NoScoper, Rewrite, Visitor};
 use crate::triggers::build_triggers;
 use crate::visitor::Returner;
 use air::messages::Diagnostics;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::io::Write;
 
 fn elaborate_one_exp<D: Diagnostics + ?Sized>(
     ctx: &Ctx,
@@ -119,7 +118,6 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
     diagnostics: &D,
     fun_ssts: &SstMap,
     stm: &Stm,
-    fun_accumulator: &mut HashSet<Fun>,
 ) -> Result<Stm, VirErr> {
     match &stm.x {
         StmX::AssertCompute(id, exp, compute) => {
@@ -143,129 +141,19 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
                 ComputeMode::ComputeOnly => Ok(stm.new_x(StmX::Block(Arc::new(vec![])))),
             }
         }
+        // If we don't have Lean compliation options turned on, throw an error
+        // Note that when Lean options are on, we keep the node as-is
+        // This is because the serialization code needs to see the `AssertLean` node
+        // in verifier.rs after the call to this function
+        #[cfg(not(any(feature = "lean", feature = "lean-export")))]
         StmX::AssertLean(exp) => {
-            // Get out the inner expression, serialize it?
-
-            // CC: It appears that to interpret the expression, you need to pass a compute mode
-            //     Since lean isn't a compute mode, we can't(?) use this function
-            /*
-            let interp_exp = crate::interpreter::eval_expr(
-                &ctx.global,
-                exp,
-                diagnostics,
-                fun_ssts.clone(),
-                ctx.global.rlimit,
-                ctx.global.arch,
-                ComputeMode::Z3,
-                &mut ctx.global.interpreter_log.lock().unwrap(),
-            )?; */
-            // let res = crate::interpreter::eval_expr_internal()
-
-            // Use the unique ID from the span to disambiguate elab_one goals
-            let span_id = stm.span.id;
-
-            // TODO: Some way to uniquely identify the assert?
-            // Across two files, the IDs might clash
-            let path = std::env::current_dir().unwrap().join(
-                format!("serialized_assert_{}.json", span_id)
-            );
-
-            let mut file = std::fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(path)
-                .unwrap();
-
-        /*
-                   let serialized_val = serde_json::to_value(func_check_sst)
-                .expect("Failed to serialize SST to JSON");
-            let wrapped_serialized_val = serde_json::json!({
-                "FnName": func_display_name,
-                "FuncCheckSst": serialized_val,
-            });
-            let _ = writeln!(file, "{}", wrapped_serialized_val.to_string()); 
-         */
-
-            // let context = serde_json::to_value(&ctx.global).unwrap();
-            // write a function to get fun objects recursively
-            // let context : Collection<Fun> = ...
-            // for col in context: let col_sst = fun_ssts.get(col).unwrap();
-            // let col_value = serde_json::to_value(&col_sst).unwrap();
-
-            // Accumulate Fun objects from inner_exp
-            accumulate_fun_objects(&exp.x, fun_accumulator);
-            // println!("fun_accumulator: {:?}", fun_accumulator);
-            // let accumulated_strings: Vec<String> = fun_accumulator.iter()
-            //     .map(|col_value| col_value).collect();
-            let mut accumulated_values = Vec::new();
-            for col in fun_accumulator.iter() {
-                let col_sst = fun_ssts.get(col).unwrap();
-                let col_value = serde_json::to_value(&col_sst.x).unwrap();
-                // println!("col_value: {:?}", col_value);
-                accumulated_values.push(col_value);
-                // let _ = writeln!(file, "{}", col_value.to_string());
-                
-                // same result as above
-                // let col_sst1 = ctx.func_sst_map.get(col).unwrap();
-                // let col_value1 = serde_json::to_value(&col_sst1).unwrap();
-                // println!("col_value1: {:?}", col_value1);
-                // let _ = writeln!(file, "{}", col_value1.to_string());
-            }
-
-            let mut datatype_values = Vec::new();
-            for dt in ctx.datatype_map.values() {
-                let dt_value = serde_json::to_value(&dt.x).unwrap();
-                datatype_values.push(dt_value);
-            }
-
-            let inner_exp = exp.x.clone();
-            let inner_value = serde_json::to_value(&inner_exp).unwrap();
-            // let wrapped_value = serde_json::json!({
-            //     "AssertId": span_id,
-            //     "Assert": inner_value,
-            // });
-            // let _ = writeln!(file, "{}", wrapped_value.to_string());
-
-            let top_level = serde_json::json!({
-                "SpecFns": accumulated_values, // list of serialized spec function bodies
-                "Datatypes": datatype_values, // list of serialized datatypes
-                "PriorAsserts": [], // list of prior assertions
-                "AssertId": span_id,
-                "Assert": inner_value,
-            });
-            let _ = writeln!(file, "{}", top_level.to_string());
-
-            // Replace the statement with a trivial block, since we discharged
-            // the proof goals to Lean
-            Ok(stm.new_x(StmX::Block(Arc::new(vec![]))))
+            let err = error_with_label(
+                &exp.span.clone(),
+                "assertion failed",
+                "To enable \"by (lean)\", compile Verus with \"--features lean\"");
+            Err(err)
         }
         _ => Ok(stm.clone()),
-    }
-}
-
-pub(crate) fn accumulate_fun_objects(exp: &ExpX, fun_accumulator: &mut HashSet<Fun>) {
-    // println!("accumulating fun objects, exp={:?}", exp);
-    match exp {
-        ExpX::Call(CallFun::Fun(fun, _), _, _) => {
-            fun_accumulator.insert(fun.clone());
-        }
-        ExpX::Bind(_, body) => {
-            accumulate_fun_objects(&body.x, fun_accumulator);
-        }
-        ExpX::Unary(_, e) => {
-            accumulate_fun_objects(&e.x, fun_accumulator);
-        }
-        ExpX::Binary(_, e1, e2) => {
-            accumulate_fun_objects(&e1.x, fun_accumulator);
-            accumulate_fun_objects(&e2.x, fun_accumulator);
-        }
-        ExpX::If(e1, e2, e3) => {
-            accumulate_fun_objects(&e1.x, fun_accumulator);
-            accumulate_fun_objects(&e2.x, fun_accumulator);
-            accumulate_fun_objects(&e3.x, fun_accumulator);
-        }
-        _ => {}
     }
 }
 
@@ -327,13 +215,12 @@ struct ElaborateVisitor2<'a, 'b, D: Diagnostics> {
     ctx: &'a Ctx,
     diagnostics: &'b D,
     fun_ssts: SstMap,
-    fun_accumulator: HashSet<Fun>,
 }
 
 impl<'a, 'b, D: Diagnostics> Visitor<Rewrite, VirErr, NoScoper> for ElaborateVisitor2<'a, 'b, D> {
     fn visit_stm(&mut self, stm: &Stm) -> Result<Stm, VirErr> {
         let stm = self.visit_stm_rec(stm)?;
-        elaborate_one_stm(self.ctx, self.diagnostics, &self.fun_ssts, &stm, &mut self.fun_accumulator)
+        elaborate_one_stm(self.ctx, self.diagnostics, &self.fun_ssts, &stm )
     }
 }
 
@@ -374,7 +261,7 @@ pub(crate) fn elaborate_function2<'a, 'b, D: Diagnostics>(
     fun_ssts: SstMap,
     function: &mut FunctionSst,
 ) -> Result<(), VirErr> {
-    let mut visitor = ElaborateVisitor2 { ctx, diagnostics, fun_ssts, fun_accumulator: HashSet::new() };
+    let mut visitor = ElaborateVisitor2 { ctx, diagnostics, fun_ssts };
     *function = visitor.visit_function(function)?;
 
     if function.x.has.is_recursive && function.x.mode == Mode::Spec {

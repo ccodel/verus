@@ -593,12 +593,10 @@ pub enum Constant {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SpannedTyped<X> {
-    // Only skip serializing `Span` if Lean compilation features are turned on
-    // CC: We skip this for now because `Span` contains lots of useless data for Lean
-    // CC: It's possible that we may want to enable this later to disambiguate name clashes
-    #[cfg_attr(any(feature = "lean", feature = "lean-export"), serde(skip))]
+    // Since the `Span` struct is not (yet) useful to Lean,
+    // we skip it if we are doing a Lean serialization
     #[cfg_attr(any(feature = "lean", feature = "lean-export"),
-        serde(default = "crate::messages::empty_span"))]
+        serde(skip_serializing_if = "crate::sst_to_lean::should_skip_lean_fields"))]
     pub span: Span,
     pub typ: Typ,
     pub x: X,
