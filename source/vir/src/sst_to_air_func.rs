@@ -268,7 +268,6 @@ fn func_body_to_air(
     if let Some(termination_check) = termination_check {
         let (termination_commands, _snap_map) = crate::sst_to_air::body_stm_to_air(
             ctx,
-            &function.x.name,
             &function.span,
             &function.x.typ_params,
             &function.x.typ_bounds,
@@ -945,7 +944,6 @@ pub fn func_sst_to_air(
 ) -> Result<(Arc<Vec<CommandsWithContext>>, Vec<(Span, SnapPos)>), VirErr> {
     let (commands, snap_map) = crate::sst_to_air::body_stm_to_air(
         ctx,
-        &function.x.name,
         &function.span,
         &function.x.typ_params,
         &function.x.typ_bounds,

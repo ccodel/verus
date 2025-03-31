@@ -16,14 +16,15 @@ struct Point {
     }
 } */
 
-/* spec fn rotate_90(p : Point) -> Point {
+spec fn rotate_90(p : Point) -> Point {
   Point { x: -p.y, y: p.x }
 }
 
 proof fn spec_for_rotate_90(p: Point) {
   let o = Point { x: -p.y, y: p.x };
+  let z = Point { x: 0, y: 0 };
   assert(o == rotate_90(p)) by (lean);
-} */
+}
 
 enum Syrup {
     Cola { size: nat },
