@@ -3,7 +3,6 @@ use crate::context::Ctx;
 use crate::messages::{error_with_label, Message, Span};
 use crate::sst::{CallFun, Exp, ExpX};
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
 
 /// This is where we handle VCs to ensure that the same invariant is not opened
 /// more than once at a time when the user opens nested invariants.

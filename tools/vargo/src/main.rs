@@ -344,7 +344,7 @@ fn clean_vstd(target_verus_dir: &std::path::PathBuf) -> Result<(), String> {
     Ok(())
 }
 
-const EXPECTED_FEATURES: &[&str] = &["singular", "axiom-usage-info", "record-history"];
+const EXPECTED_FEATURES: &[&str] = &["singular", "axiom-usage-info", "record-history", "lean", "lean-export"];
 
 fn check_expected_features(feature_args: &Vec<String>) -> Result<(), String> {
     let feature_args: Vec<_> = feature_args
