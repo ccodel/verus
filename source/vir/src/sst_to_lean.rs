@@ -359,8 +359,7 @@ fn lean_visit_stm(lctx: &mut LeanCtx, stm: &Stm) {
                 lean_visit_typ(lctx, &p.1);
             }
         }
-        StmX::OpenInvariant(exp, stm) => {
-            lean_visit_exp(lctx, exp);
+        StmX::OpenInvariant(stm) => {
             lean_visit_stm(lctx, stm);
         }
         StmX::ClosureInner { body, typ_inv_vars } => {
@@ -510,9 +509,8 @@ fn stm_has_lean(stm: &Stm) -> bool {
             || loop_invs_has_lean(invs)
             || exps_has_lean(decrease)
         }
-        StmX::OpenInvariant(exp, stm) => {
-            exp_has_lean(exp)
-            || stm_has_lean(stm)
+        StmX::OpenInvariant(stm) => {
+            stm_has_lean(stm)
         }
         StmX::ClosureInner { body, .. } => {
             stm_has_lean(body)
