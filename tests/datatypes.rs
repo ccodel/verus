@@ -34,27 +34,21 @@ enum Syrup {
     Syrup,
 }
 
-/* enum Beverage {
+enum Beverage {
     Coffee { creamers: nat, sugar: bool },
     Soda { flavor: Syrup },
     Water { ice: bool },
-} */
+}
 
-proof fn test_beverage() {
-    assert(Syrup::RootBeer != Syrup::Syrup) by (lean);
-    // assert(b is Coffee) by (lean);
-    // assert(Beverage::Coffee { creamers := 0, sugar := true } != Beverage::Soda { flavor := Syrup::Cola }) by (lean);
+proof fn test_beverage(bev: Beverage) 
+    requires bev is Soda
+{
+    assert(Syrup::RootBeer != Syrup::Syrup);
+    assert(bev !is Coffee) by (lean);
+    assert(Beverage::Coffee { creamers: 0, sugar:  true } != Beverage::Soda { flavor : Syrup::Cola { size: 5 } }) by (lean);
 }
 
 /*
-// ANCHOR: syrup
-enum Syrup {
-    Cola,
-    RootBeer,
-    Orange,
-    LemonLime,
-}
-// ANCHOR_END: syrup
 
 struct Dessert {}
 impl Dessert {
