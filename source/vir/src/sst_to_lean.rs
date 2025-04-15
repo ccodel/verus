@@ -3,9 +3,11 @@ use air::ast::Binders;
 use crate::ast::{
     Typ, TypX, Typs, Datatype, DatatypeX, Dt, Fun, PathX, Mode, Variant, VarBinder, VarBinders,
 };
+use crate::ast_util::types_equal;
 use crate::sst::{
-    Bnd, BndX, Dest, Exp, Exps, ExpX, LoopInv, LoopInvs, Stm, Stms, StmX, CallFun, KrateSst, FunctionSst, FuncCheckSst
+    Bnd, BndX, Dest, Exp, Exps, ExpX, FuncDeclSst, LoopInv, LoopInvs, Par, Pars, Stm, Stms, StmX, CallFun, KrateSst, FunctionSst, FuncCheckSst
 };
+use crate::recursion::Node;
 
 use std::collections::HashSet;
 
@@ -27,6 +29,7 @@ use std::io::Write;
 /// while also logging which objects are needed in the Lean serialization.
 struct LeanCtx<'a> {
     ctx: &'a Ctx,
+    typs: Vec<Typ>, // CC: Replace with manual hash set/map later?
     fns: HashSet<Fun>,
     dts: HashSet<Dt>,
 }
@@ -87,6 +90,7 @@ trait LeanVisitor {
 
 
 fn lean_visit_datatype(lctx: &mut LeanCtx, datatype: &Datatype) {
+    // println!("lean_visit_datatype: {:?}", datatype.x.name);
     let DatatypeX { variants, .. } = &datatype.x;
     for variant in variants.iter() {
         let Variant { fields, .. } = variant;
@@ -107,13 +111,20 @@ fn lean_visit_dt(lctx: &mut LeanCtx, dt: &Dt) {
     lean_visit_datatype(lctx, datatype);
 }
 
-fn lean_visit_typ(lctx: &mut LeanCtx, typ: &TypX) {
+fn lean_visit_typ(lctx: &mut LeanCtx, typ: &Typ) {
     // Note: Because `TypX` cannot implement `Eq` or `PartialEq` traits
     //       (see the note in vir/src/ast.rs), we cannot use a `HashSet`
     //       to prevent duplicate type visits. Oh well.
+    // Instead, we use a list of types
+    for typ2 in lctx.typs.iter() {
+        if types_equal(typ, typ2) { return; }
+    }
+        
+    lctx.typs.push(typ.clone());
+    // println!("lean_visit_typ: {:?}", typ);
 
     // CC: TODO implement the FnDef branch, because traits are somewhat like Lean type classes
-    match typ {
+    match &**typ {
         TypX::SpecFn(typs, typ) => {
             lean_visit_typs(lctx, typs);
             lean_visit_typ(lctx, typ);
@@ -122,8 +133,9 @@ fn lean_visit_typ(lctx: &mut LeanCtx, typ: &TypX) {
             lean_visit_typs(lctx, typs);
             lean_visit_typ(lctx, typ);
         }
-        TypX::Datatype(dt, _, _) => {
+        TypX::Datatype(dt, typs, _) => {
             lean_visit_dt(lctx, dt);
+            lean_visit_typs(lctx, typs);
         }
         TypX::Primitive(_, typs) => { lean_visit_typs(lctx, typs); }
         TypX::Decorate(_, _, typ) => { lean_visit_typ(lctx, typ); }
@@ -381,6 +393,25 @@ fn lean_visit_stms(lctx: &mut LeanCtx, stms: &Stms) {
     }
 }
 
+fn lean_visit_par(lctx: &mut LeanCtx, par: &Par) {
+    let typ = &par.x.typ;
+    lean_visit_typ(lctx, typ);
+}
+
+fn lean_visit_pars(lctx: &mut LeanCtx, pars: &Pars) {
+    for par in pars.iter() {
+        lean_visit_par(lctx, par);
+    }
+}
+
+fn lean_visit_func_decl_sst(lctx: &mut LeanCtx, sst: &FuncDeclSst) {
+    lean_visit_pars(lctx, &sst.req_inv_pars);
+    lean_visit_pars(lctx, &sst.ens_pars);
+    lean_visit_pars(lctx, &sst.post_pars);
+    lean_visit_exps(lctx, &sst.reqs);
+    lean_visit_exps(lctx, &sst.enss);
+}
+
 fn lean_visit_func_sst(lctx: &mut LeanCtx, sst: &FunctionSst) {
     let f = &sst.x;
 
@@ -401,6 +432,9 @@ fn lean_visit_func_sst(lctx: &mut LeanCtx, sst: &FunctionSst) {
 
     // TODO: Only serialize up to the `by (lean)` attributes
     // For example, if there are 3 asserts, but `by (lean)` in only on the first
+    lean_visit_pars(lctx, &f.pars);
+    lean_visit_par(lctx, &f.ret);
+    lean_visit_func_decl_sst(lctx, &f.decl);
     lean_visit_stm(lctx, &proof.body);
 }
 
@@ -614,6 +648,7 @@ fn func_sst_has_lean(sst: &FunctionSst) -> bool {
 pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
     let mut lctx = LeanCtx {
         ctx,
+        typs: Vec::new(),
         fns: HashSet::new(),
         dts: HashSet::new(),
     };
@@ -641,6 +676,40 @@ pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
     // Do datatypes first, then spec functions, then proof functions
 
     this_thread_start_skipping_nonlean_fields();
+
+    // Loop through the connected component, serializing in order
+    /*
+    for node in ctx.global.func_call_sccs.iter() {
+        match node {
+            Node::Fun(f) => {
+                if !lctx.fns.contains(f) { continue; }
+                // println!("Function: {:?}", f);
+                if let Some(decl) = serialize_fn(ctx, f) {
+                    decls.push(decl);
+                }
+            }
+            Node::Datatype(dt) => {
+                if !lctx.dts.contains(dt) { continue; }
+                // println!("Datatype: {:?}", dt);
+                decls.push(serialize_dt(ctx, dt));
+            }
+            Node::Trait(path) => {
+                // println!("Trait: {:?}", path);
+            }
+            Node::TraitImpl(path) => {
+                // println!("TraitImpl: {:?}", path);
+            }
+            Node::TraitReqEns(path, b) => {
+                // println!("TraitReqEns: {:?}", path);
+            }
+            Node::ModuleReveal(path) => {
+                // println!("ModuleReveal: {:?}", path);
+            }
+            Node::SpanInfo { span_infos_index, text} => {
+                // println!("SpanInfo: {:?}", text);
+            }
+        }
+    } */
 
     for dt in lctx.dts.iter() {
         match dt {
@@ -679,6 +748,7 @@ pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
 
     let json = serde_json::json! {
         {
+            "krate": module_name,
             "decls": decls,
         }
     };
@@ -713,6 +783,7 @@ const DECL_TYPE: &str = "DeclType";
 const DECL_VAL: &str = "x";
 const DATATYPE_DECL: &str = "Datatype";
 const SPEC_FUN_DECL: &str = "SpecFn";
+const PROOF_FUN_DECL: &str = "ProofFn";
 const ASSERT_DECL: &str = "Assert";
 const FUNC_CHECK_SST_DECL: &str = "FuncCheckSst";
 
@@ -736,15 +807,23 @@ fn serialize_dt(ctx: &Ctx, dt: &Dt) -> serde_json::Value {
     }
 }
 
-fn serialize_fn(ctx: &Ctx, fun: &Fun) -> serde_json::Value {
-    let sst = &ctx.func_sst_map.get(fun).unwrap().x;
-    serde_json::json! {
+fn serialize_fn(ctx: &Ctx, fun: &Fun) -> Option<serde_json::Value> {
+    let Some(sst) = &ctx.func_sst_map.get(fun) else { return None };
+    let sst = &sst.x;
+    if sst.mode == Mode::Exec { return None; }
+
+    let fun_type = match sst.mode {
+        Mode::Spec => SPEC_FUN_DECL,
+        Mode::Proof => PROOF_FUN_DECL,
+        Mode::Exec => unreachable!(),
+    };
+    
+    Some (serde_json::json! {
         {
-            DECL_TYPE: SPEC_FUN_DECL,
-            "name": fun,
+            DECL_TYPE: fun_type,
             DECL_VAL: sst,
         }
-    }
+    })
 }
 
 fn serialize_exp(_ : &Ctx, e: &ExpX) -> serde_json::Value {
@@ -765,321 +844,3 @@ fn serialize_func_check_sst(_: &Ctx, fun: &Fun, sst: &FuncCheckSst) -> serde_jso
         }
     }
 }
-
-/*
-pub fn serialize_leanables(ctx: &Ctx, to_lean: &Vec<Leanable>) {
-    if to_lean.len() == 0 {
-        return;
-    }
-
-    let mut lctx = LeanableCtx {
-        fns: HashSet::new(),
-        dts: HashSet::new(),
-    };
-
-    // Accumulate all necessary context from the Leanables
-    for l in to_lean.iter() {
-        match l {
-            Leanable::Exp(e) => {
-                visit_exp(&mut lctx, &e.x);
-            }
-            Leanable::Func(_, sst) => {
-                visit_func_check_sst(&mut lctx, sst);
-            }
-        }
-    }
-
-    // Now serialize all data types, then spec functions, then asserts/proof fns
-    let mut decls: Vec<serde_json::Value> = Vec::new();
-
-    inc_skip_lean_fields();
-
-    for dt in lctx.dts.iter() {
-        decls.push(serialize_dt(ctx, dt));
-    }
-
-    for fun in lctx.fns.iter() {
-        decls.push(serialize_fn(ctx, fun));
-    }
-
-    // Now visit the Leanables once again and serialize each
-    for l in to_lean.iter() {
-        match l {
-            Leanable::Exp(e) => {
-                decls.push(serialize_exp(ctx, &e.x));
-            }
-            Leanable::Func(fun, sst) => {
-                decls.push(serialize_func_check_sst(ctx, fun, sst));
-            }
-       }
-    }
-
-    dec_skip_lean_fields();
-
-    let module_name = ctx.module_path().to_str();
-
-    let path = std::env::current_dir().unwrap().join(
-        format!("serialized_{}.json", module_name)
-    );
-
-    let mut file = std::fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(path)
-        .unwrap();
-
-    let json = serde_json::json! {
-        {
-            "decls": decls,
-        }
-    };
-
-    let _ = writeln!(file, "{}", json.to_string());
-
-        // CC: It appears that to interpret the expression, you need to pass a compute mode
-      //     Since lean isn't a compute mode, we can't(?) use this function
-      /*
-      let interp_exp = crate::interpreter::eval_expr(
-          &ctx.global,
-          exp,
-          diagnostics,
-          fun_ssts.clone(),
-          ctx.global.rlimit,
-          ctx.global.arch,
-          ComputeMode::Z3,
-          &mut ctx.global.interpreter_log.lock().unwrap(),
-      )?; */
-      // let res = crate::interpreter::eval_expr_internal()
-
-      // Use the unique ID from the span to disambiguate elab_one goals
-      /*
-      let span_id = stm.span.id;
-
-      // TODO: Some way to uniquely identify the assert?
-      // Across two files, the IDs might clash
-      let path = std::env::current_dir().unwrap().join(
-          format!("serialized_assert_{}.json", span_id)
-      );
-
-      let mut file = std::fs::OpenOptions::new()
-          .create(true)
-          .write(true)
-          .truncate(true)
-          .open(path)
-          .unwrap();
-
-  /*
-              let serialized_val = serde_json::to_value(func_check_sst)
-          .expect("Failed to serialize SST to JSON");
-      let wrapped_serialized_val = serde_json::json!({
-          "FnName": func_display_name,
-          "FuncCheckSst": serialized_val,
-      });
-      let _ = writeln!(file, "{}", wrapped_serialized_val.to_string()); 
-    */
-
-      // let context = serde_json::to_value(&ctx.global).unwrap();
-      // write a function to get fun objects recursively
-      // let context : Collection<Fun> = ...
-      // for col in context: let col_sst = fun_ssts.get(col).unwrap();
-      // let col_value = serde_json::to_value(&col_sst).unwrap();
-
-      // Accumulate Fun objects from inner_exp
-      accumulate_fun_objects(&exp.x, fun_accumulator);
-      // println!("fun_accumulator: {:?}", fun_accumulator);
-      // let accumulated_strings: Vec<String> = fun_accumulator.iter()
-      //     .map(|col_value| col_value).collect();
-
-      let mut accumulated_values = Vec::new();
-      for col in fun_accumulator.iter() {
-          let col_sst = fun_ssts.get(col).unwrap();
-          accumulated_values.push(col_sst.clone());
-      }
-
-      let mut datatype_values = Vec::new();
-      for dt in ctx.datatype_map.values() {
-          datatype_values.push(dt.clone());
-      }
-
-      inc_skip_lean_fields();
-      let top_level = serde_json::json!({
-          "SpecFns": accumulated_values, // list of serialized spec function bodies
-          "Datatypes": datatype_values, // list of serialized datatypes
-          "PriorAsserts": [], // list of prior assertions
-          "AssertId": span_id,
-          "Assert": exp,
-      });
-      let _ = writeln!(file, "{}", top_level.to_string());
-      dec_skip_lean_fields();
-      */
-}
-      */
-
-// Implement slimmer serializations
-
-/*impl<X: Serialize> SpannedTyped<X> {
-  pub fn to_lean_json(&self) -> serde_json::Value {
-      serde_json::json! ({
-          "typ": self.typ,
-          "x": self.x
-      })
-  }
-} */
-
-/*impl<X: Serialize> {
-  pub fn to_lean_json(&self) -> serde_json::Value {
-      serde_json::json! ({
-          "span": self.span,
-          "x": self.x
-      })
-  }
-} */
-
-/*
-
-        #[cfg(any(feature = "lean", feature = "lean-export"))]
-        // Now export the SST to a new tempfile
-        // CC: For now, use helloworld.json
-        // CC: Depends on whether `lean` or `lean-export` is used? 
-
-        // If "lean-export" is provided, then we export a serlialized version
-        // of the function's SST to a JSON file. We then do *NOT* add a Command
-        // to `state.commands`, as we assume here that the Lean obligations
-        // will be correctly discharged.
-        //#[cfg(feature = "lean-export")]
-        //{
-
-            // Get some name for the function
-            // For now, the last element of its krate/segments
-
-            // Hmm this implementation doesn't work...
-            let func_display_name = func_name.path.segments.last().unwrap();
-            let path = std::env::current_dir().unwrap().join(
-                format!("serialized_fn_{}.json", func_display_name)
-            );
-
-            let mut file = std::fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .truncate(true)
-                .open(path)
-                .unwrap();
-
-            let serialized_val = serde_json::to_value(func_check_sst)
-                .expect("Failed to serialize SST to JSON");
-
-            let fun_accumulator: &mut HashSet<Fun> = &mut HashSet::new();
-            for req in reqs.iter() {
-                accumulate_fun_objects(&req.x, fun_accumulator);
-            }
-            for ens in post_condition.ens_exps.iter() {
-                accumulate_fun_objects(&ens.x, fun_accumulator);
-            }
-            let mut spec_fns = Vec::new();
-            for col in fun_accumulator.iter() {
-                let col_sst = ctx.func_sst_map.get(col).unwrap();
-                spec_fns.push(col_sst.to_lean_json());
-            }
-            
-            let mut datatype_values = Vec::new();
-            for dt in ctx.datatype_map.values() {
-                datatype_values.push(dt.to_lean_json());
-            }
-
-            let wrapped_serialized_val = serde_json::json!({
-                "SpecFns": spec_fns,
-                "Datatypes": datatype_values,
-                "FnName": func_display_name,
-                "FuncCheckSst": serialized_val,
-            });
-            let _ = writeln!(file, "{}", wrapped_serialized_val.to_string());
-            // let _ = serde_json::to_writer(file, &wrapped_serialized_val);
-        //}
-        
-
-        // If "lean" is provided, then we add a Command to `state.commands`
-        // to verify that the Lean proofs are correct.
-        // CC: Still hash the serialization to ensure that the statement is
-        //     correct?
-        #[cfg(feature = "lean")]
-        {
-
-        }
-
-        /*
-        let f: crate::vlir::Theorem = crate::vlir::Theorem {
-            name: path.clone().into(),
-            typ_params: typ_params.clone(),
-            params: crate::vlir::params(params.clone()).map_err(crate::messages::error_bare)?,
-            require: reqs.clone().try_into().map_err(crate::messages::error_bare)?,
-            ensure: Arc::new(post_condition.ens_exps.clone()).try_into().map_err(crate::messages::error_bare)?,
-        };
-        let path = std::env::current_dir().unwrap().join(
-            format!("{}.json",
-                path.krate.iter().chain(path.segments.iter())
-                    .map(|x| x.as_ref().as_str()).collect::<Vec<&str>>().join("_")));
-        let file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .unwrap();
-
-        let _ = serde_json::to_writer_pretty(file, &f);
-        //if is_lean {
-            let path = ctx.fun.as_ref().map(|x| x.current_fun.path.clone()).expect("lean call not in function context");
-            let path: PathX = (*path.as_ref()).clone();
-            let path = PathX {
-                krate: path.krate,
-                segments: {
-                    //let mut orig = (*path.segments.as_ref()).clone();
-                    let orig = (*path.segments.as_ref()).clone();
-                    //orig.push(rand::random::<u16>().to_string().into());
-                    orig.into()
-                },
-            };
-
-            let path = std::env::current_dir().unwrap().join(
-                format!("{}.json",
-                    path.krate.iter().chain(path.segments.iter())
-                        .map(|x| x.as_ref().as_str()).collect::<Vec<&str>>().join("_")));
-
-            /*
-            let mut file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(path)
-                .unwrap();
-            */
-
-            //let _ = writeln!(file, "Hello world");
-            //drop(file);
-            // let _ = println!("Would have written to {}", path.display());
-            //}
-        */
-
-    pub(crate) fn accumulate_fun_objects(exp: &ExpX, fun_accumulator: &mut HashSet<Fun>) {
-    // println!("accumulating fun objects, exp={:?}", exp);
-    match exp {
-        ExpX::Call(CallFun::Fun(fun, _), _, _) => {
-            fun_accumulator.insert(fun.clone());
-        }
-        ExpX::Bind(_, body) => {
-            accumulate_fun_objects(&body.x, fun_accumulator);
-        }
-        ExpX::Unary(_, e) => {
-            accumulate_fun_objects(&e.x, fun_accumulator);
-        }
-        ExpX::Binary(_, e1, e2) => {
-            accumulate_fun_objects(&e1.x, fun_accumulator);
-            accumulate_fun_objects(&e2.x, fun_accumulator);
-        }
-        ExpX::If(e1, e2, e3) => {
-            accumulate_fun_objects(&e1.x, fun_accumulator);
-            accumulate_fun_objects(&e2.x, fun_accumulator);
-            accumulate_fun_objects(&e3.x, fun_accumulator);
-        }
-        _ => {}
-    }
-}
-*/
