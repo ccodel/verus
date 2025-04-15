@@ -99,6 +99,12 @@ impl<T: std::cmp::Eq + std::hash::Hash + Clone> Graph<T> {
         self.nodes[v].edges.push(w);
     }
 
+    pub fn does_edge_exist(& self, src: &T, dst: &T) -> bool {
+        let Some(v) = self.h.get(src) else { return false };
+        let Some(w) = self.h.get(dst) else { return false };
+        self.nodes[*v].edges.contains(w)
+    }
+
     #[allow(dead_code)]
     pub fn add_directed_edge_if_nodes_exist(&mut self, src: T, dst: T) {
         let v = self.h.get(&src);
