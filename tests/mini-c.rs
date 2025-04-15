@@ -39,11 +39,6 @@ enum Command {
     Concat(Box<Command>, Box<Command>),
     IfThenElse(Expr, Box<Command>, Box<Command>),
     While(Expr, Box<Command>),
-    // PrintS(String),
-    // PrintS(&str),
-    // PrintE(Expr),
-    // GetInt(Variable),
-    // GetSecretInt(Variable),
 }
 
 //////////////////////////////////////////////////////////////////
@@ -150,78 +145,15 @@ proof fn ExprExamples() {
 //
 //////////////////////////////////////////////////////////////////
 
-#[verifier::ext_equal]
-struct IO {
-    in_public: Seq<int>, // Vec instead of Seq because cannot call Seq::add with mode spec
-    in_secret: Seq<int>, 
-    output: Seq<String>,
-    // output: Seq<&'static str>,
-}
-
-// // CZ: not sure how to account for the {:extern} annotation in Dafny
-// // #[verifier::external_body]
-// proof fn PrintString(s: String, io: IO) -> (io_output:IO)
-//     ensures io_output =~= (IO {output : io.output + seq![s], ..io}),
-// {
-//     // I'll use ``assume'' for now, bad practice?
-//     let io_output : IO = io; // cannot use a struct without initializing its fields
-//     assume(io_output =~= (IO {output : io.output + seq![s], ..io}));
-//     io_output
-// }
-
-// // marked as {:extern} in Dafny
-// // #[verifier::external_body]
-// fn ReadInt(io: IO) -> (output: (i32, IO)) // return type should be (int, IO) instead
-//     ensures output.1 =~= (IO {in_public : io.in_public + seq![output.0 as int], ..io}),
-// {
-//     let output : (i32, IO) = (0, io);
-//     assume(output.1 =~= (IO {in_public : io.in_public + seq![output.0 as int], ..io}));
-//     output
-// }
-
-// // marked as {:extern} in Dafny
-// // #[verifier::external_body]
-// fn ReadSecretInt(io: IO) -> (output: (i32, IO))
-//     // Same as for ReadInt
-//     ensures output.1 =~= (IO {in_secret : io.in_secret + seq![output.0 as int], ..io}),
-// {
-//     let output : (i32, IO) = (0, io);
-//     assume(output.1 =~= (IO {in_secret : io.in_secret + seq![output.0 as int], ..io}));
-//     output
-// }
-
-// cannot call function `alloc::string::impl&%38::to_string` with mode exec
-// error: `alloc::string::impl&%45::from` is not supported (note: you may be able to add a Verus specification to this function with the `external_fn_specification` attribute) 
-// (note: the vstd library provides some specification for the Rust std library, but it is currently limited)
-// #[external_fn_specification]
-// fn Bool2String(b: bool) -> String
-// fn Bool2String(b: bool) -> &'static str
-// {
-//     if b {
-//         "true"
-//     } else {
-//         "false"
-//     }
-// }
-
-// marked as {:extern} in Dafny
-// `builtin::int` doesn't implement `std::fmt::Display`
-// #[verifier::external_body]
-// fn Int2String(i: i32) -> String
-// {
-//     i.to_string()
-// }
-
 enum CResult {
     Timeout,
     Fail,
-    Success{s:Store, io:IO},
+    Success{s:Store},
 }
 
 struct State {
     fuel: nat,
     store: Store,
-    io: IO,
 }
 
 spec fn EvalCommand(s: &State, c: Box<Command>) -> CResult
@@ -231,12 +163,12 @@ spec fn EvalCommand(s: &State, c: Box<Command>) -> CResult
         CResult::Timeout
     } else {
         match *c {
-            Command::Noop => CResult::Success{s: s.store, io: s.io},
+            Command::Noop => CResult::Success{s: s.store},
             Command::Assign(v, e) => { // variable := e
                 match EvalExpr(Box::new(e), &s.store) {
                     EResult::EFail => CResult::Fail,
                     EResult::ESuccess(val) => {
-                        CResult::Success{s: s.store.insert(v, val), io: s.io}
+                        CResult::Success{s: s.store.insert(v, val)}
                     }
                 }
             }
@@ -245,8 +177,8 @@ spec fn EvalCommand(s: &State, c: Box<Command>) -> CResult
                 match result0 {
                     CResult::Timeout => CResult::Timeout,
                     CResult::Fail => CResult::Fail,
-                    CResult::Success{s: store0, io: io0} => {
-                        EvalCommand(&State {fuel: s.fuel, store: store0, io: io0}, c1)
+                    CResult::Success{s: store0} => {
+                        EvalCommand(&State {fuel: s.fuel, store: store0}, c1)
                     }
                 }
             }
@@ -271,41 +203,22 @@ spec fn EvalCommand(s: &State, c: Box<Command>) -> CResult
                     EResult::ESuccess(Value::B(b)) => 
                         if !b {
                             // The while loop is complete
-                            CResult::Success{s: s.store, io: s.io}
+                            CResult::Success{s: s.store}
                         } else {
                             // Otherwise, execute the body, and then re-evaluate the while loop code (c)
-                            EvalCommand(&State {fuel: (s.fuel - 1) as nat, store: s.store, io: s.io}, Box::new(Command::Concat(body, c)))
+                            EvalCommand(&State {fuel: (s.fuel - 1) as nat, store: s.store}, Box::new(Command::Concat(body, c)))
                         }
                 }
             }
-            // Command::PrintS(str) => {
-            //     let io = PrintString(str, s.io);
-            //     CResult::Success(s.store, io)
-            // }
-            // Command::PrintE(e) => {
-            //     let value = EvalExpr(Box::new(e), &s.store);
-            //     match value {
-            //         EResult::EFail => CResult::Fail,
-            //         EResult::ESuccess(Value::B(b)) => {
-            //             let io = PrintString(Bool2String(b), s.io);
-            //             CResult::Success(s.store, io)
-            //         },
-            //         EResult::ESuccess(Value::I(i)) => {
-            //             let io = PrintString(Int2String(i as i32), s.io);
-            //             CResult::Success(s.store, io)
-            //         }
-            //     }
-            // }
-            // _ => CResult::Fail,
         }
     }
 }
 
-proof fn CommandExamples(io: IO)
+proof fn CommandExamples()
 {
     let x : Variable = Variable{name: "x"};
     let store : Store = map![x => Value::I(2)];
-    let s : State = State{fuel: 1 as nat, store: store, io: io};
+    let s : State = State{fuel: 1 as nat, store: store};
     
     // Example 0: Noop has no effect
     let cr = EvalCommand(&s, Box::new(Command::Noop));
@@ -321,8 +234,8 @@ proof fn CommandExamples(io: IO)
     let c1 = Box::new(Command::Assign(x, Expr::Int(335)));
     let c = Box::new(Command::Concat(c0, c1));
     // assert(EvalCommand(&s, c0) is Success && EvalCommand(&s, c1) is Success); // helper assert
-    assert(EvalCommand(&s, c0) matches CResult::Success{s: store0, io: io0} 
-        && EvalCommand(&State {fuel: s.fuel, store: store0, io: io0}, c1) is Success); // helper assert
+    assert(EvalCommand(&s, c0) matches CResult::Success{s: store0} 
+        && EvalCommand(&State {fuel: s.fuel, store: store0}, c1) is Success); // helper assert
     let cr = EvalCommand(&s, c);
     assert(cr is Success && cr->s == map![x => Value::I(335)]);
 
@@ -387,10 +300,6 @@ spec fn CommandWellTyped(d:Declarations, c:Command) -> bool
         Command::While(cond, body) => {
             ExprHasType(d, cond, Type::TBool) && CommandWellTyped(d, *body)
         },
-        // Command::PrintS(_) => true,
-        // Command::PrintE(e) => ExprHasType(d, e, Type::TInt) || ExprHasType(d, e, Type::TBool),
-        // Command::GetInt(v) | Command::GetSecretInt(v) => 
-        //     if d.contains_key(v) { d[v] == Type::TInt } else { false },
     }
 }
 
@@ -426,15 +335,6 @@ proof fn WellTypedExprSuccess(d:Declarations, s:Store, e:Expr, t:Type)
             assert(ExprHasType(d, *lhs, Type::TInt) && ExprHasType(d, *rhs, Type::TInt));
             WellTypedExprSuccess(d, s, *lhs, Type::TInt);
             WellTypedExprSuccess(d, s, *rhs, Type::TInt);
-
-            // let left = EvalExpr(lhs, &s);
-            // let right = EvalExpr(rhs, &s);
-            // assert(left is ESuccess && right is ESuccess && 
-            //        left->0 is I && right->0 is I
-            //        ==> EvalExpr(Box::new(e), &s) is ESuccess);
-            // assert(left is ESuccess ==> left->0 is I);
-            // assert(right is ESuccess ==> right->0 is I);
-            // assert(left is ESuccess && right is ESuccess ==> EvalExpr(Box::new(e), &s) is ESuccess);
         }
     }
 }
@@ -463,7 +363,7 @@ proof fn WellTypedCommandSuccess(d:Declarations, s:State, c:Command)
                 WellTypedCommandSuccess(d, s, *c0);
                 let cr = EvalCommand(&s, c0);
                 if cr is Success {
-                    WellTypedCommandSuccess(d, State {fuel: s.fuel, store: cr->s, io: cr->io}, *c1);
+                    WellTypedCommandSuccess(d, State {fuel: s.fuel, store: cr->s}, *c1);
                 }
             }
             Command::IfThenElse(cond, ifTrue, ifFalse) => {
@@ -473,7 +373,7 @@ proof fn WellTypedCommandSuccess(d:Declarations, s:State, c:Command)
             }
             Command::While(cond, body) => {
                 WellTypedExprSuccess(d, s.store, cond, Type::TBool);
-                WellTypedCommandSuccess(d, State {fuel: (s.fuel - 1) as nat, store: s.store, io: s.io}, 
+                WellTypedCommandSuccess(d, State {fuel: (s.fuel - 1) as nat, store: s.store}, 
                                        Command::Concat(body, Box::new(c)));
             }
         }
@@ -484,7 +384,7 @@ proof fn WellTypedCommandSuccess(d:Declarations, s:State, c:Command)
 //   If evaluating a well-typed command using a well-typed store
 //   does not time out, then it must succeed (i.e., it doesn't fail),
 //   and it produces a well-typed store
-proof fn TypeSafety(d:Declarations, s:State, io:IO, c:Command)
+proof fn TypeSafety(d:Declarations, s:State, c:Command) by (lean)
     requires
         StoreWellTyped(d, s.store),
         CommandWellTyped(d, c),
