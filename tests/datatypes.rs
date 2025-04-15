@@ -10,6 +10,11 @@ struct Point {
     y: int,
 }
 
+struct Worthless {
+    x: bool,
+    y: nat,
+}
+
 /*impl Point {
     spec fn len2(&self) -> int {
         self.x * self.x + self.y * self.y
