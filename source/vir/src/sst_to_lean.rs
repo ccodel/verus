@@ -718,17 +718,21 @@ pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
         }
     }
 
-    for fun in lctx.fns.iter() {
-        let sst = &lctx.ctx.func_sst_map.get(fun).unwrap().x;
+    for f in lctx.fns.iter() {
+        let sst = &lctx.ctx.func_sst_map.get(f).unwrap().x;
         if sst.mode == Mode::Spec {
-            decls.push(serialize_fn(ctx, fun));
+            if let Some(decl) = serialize_fn(ctx, f) {
+                decls.push(decl);
+            }
         }
     }
 
-    for fun in lctx.fns.iter() {
-        let sst = &lctx.ctx.func_sst_map.get(fun).unwrap().x;
+    for f in lctx.fns.iter() {
+        let sst = &lctx.ctx.func_sst_map.get(f).unwrap().x;
         if sst.mode == Mode::Proof {
-            decls.push(serialize_fn(ctx, fun));
+            if let Some(decl) = serialize_fn(ctx, f) {
+                decls.push(decl);
+            }
         }
     }
 
