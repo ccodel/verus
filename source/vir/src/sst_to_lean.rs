@@ -7,6 +7,7 @@ use crate::ast_util::types_equal;
 use crate::sst::{
     Bnd, BndX, Dest, Exp, Exps, ExpX, FuncDeclSst, LoopInv, LoopInvs, Par, Pars, Stm, Stms, StmX, CallFun, KrateSst, FunctionSst, FuncCheckSst
 };
+use crate::scc::Graph;
 use crate::recursion::Node;
 
 use std::collections::HashSet;
@@ -121,7 +122,7 @@ fn lean_visit_typ(lctx: &mut LeanCtx, typ: &Typ) {
     }
         
     lctx.typs.push(typ.clone());
-    // println!("lean_visit_typ: {:?}", typ);
+    println!("lean_visit_typ: {:?}", typ);
 
     // CC: TODO implement the FnDef branch, because traits are somewhat like Lean type classes
     match &**typ {
@@ -642,6 +643,75 @@ fn func_sst_has_lean(sst: &FunctionSst) -> bool {
     stm_has_lean(&proof.body)
 }
 
+fn add_deps_for_typ(lctx: &LeanCtx, graph: &mut Graph<Dt>, src_dt: &Dt, typ: &Typ) {
+    match &**typ {
+        TypX::SpecFn(typs, typ) => {
+            add_deps_for_typs(lctx, graph, src_dt, typs);
+            add_deps_for_typ(lctx, graph, src_dt, typ);
+        }
+        TypX::AnonymousClosure(typs, typ, _) => {
+            add_deps_for_typs(lctx, graph, src_dt, typs);
+            add_deps_for_typ(lctx, graph, src_dt, typ);
+        }
+        TypX::FnDef(_, typs, _) => {
+            // TODO: Handle `Fun` argument(?)
+            add_deps_for_typs(lctx, graph, src_dt, typs);
+        }
+        TypX::Datatype(dt, typs, _) => {
+            add_deps_for_dt(lctx, graph, src_dt, dt);
+            add_deps_for_typs(lctx, graph, src_dt, typs);
+        }
+        TypX::Primitive(_, typs) => { add_deps_for_typs(lctx, graph, src_dt, typs) }
+        TypX::Decorate(_, _, typ) => { add_deps_for_typ(lctx, graph, src_dt, typ) }
+        TypX::Boxed(typ) => { add_deps_for_typ(lctx, graph, src_dt, typ) }
+        TypX::Projection { trait_typ_args, .. } => {
+            // Drop the 0th element, since it is Self
+            for typ in trait_typ_args.iter().skip(1) {
+                add_deps_for_typ(lctx, graph, src_dt, typ);
+            }
+        }
+        _ => { }
+    }
+}
+
+fn add_deps_for_typs(lctx: &LeanCtx, graph: &mut Graph<Dt>, src_dt: &Dt, typs: &Typs) {
+    for typ in typs.iter() {
+        add_deps_for_typ(lctx, graph, src_dt, typ);
+    }
+}
+
+fn add_deps_for_dt(lctx: &LeanCtx, graph: &mut Graph<Dt>, src_dt: &Dt, dt: &Dt) {
+    if src_dt == dt || graph.does_edge_exist(src_dt, dt) { return; }
+    graph.add_edge(src_dt.clone(), dt.clone());
+
+    let datatype = lctx.ctx.datatype_map.get(dt).unwrap();
+    let DatatypeX { variants, .. } = &datatype.x;
+    for variant in variants.iter() {
+        for field in variant.fields.iter() {
+            let typ = &field.a.0;
+            add_deps_for_typ(lctx, graph, src_dt, typ);
+        }
+    }
+}
+
+fn compute_dt_deps(lctx: &LeanCtx, graph: &mut Graph<Dt>, dt: &Dt) {
+    let datatype = lctx.ctx.datatype_map.get(dt).unwrap();
+    let DatatypeX { variants, .. } = &datatype.x;
+    for variant in variants.iter() {
+        let Variant { fields, .. } = variant;
+        for field in fields.iter() {
+            let typ = &field.a.0;
+            add_deps_for_typ(lctx, graph, dt, typ);
+        }
+    }
+}
+
+fn compute_all_dt_deps(lctx: &LeanCtx, graph: &mut Graph<Dt>) {
+    for dt in lctx.dts.iter() {
+        compute_dt_deps(lctx, graph, dt);
+    }
+}
+
 /// If any `by (lean)` attributes in the crate, the crate gets serialized to a JSON.
 ///
 /// This is the entrypoint for Lean serialization.
@@ -673,66 +743,61 @@ pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
     // The top-level JSON object is an array, so we push declarations onto `decls`
     let mut decls: Vec<serde_json::Value> = Vec::new();
 
-    // Do datatypes first, then spec functions, then proof functions
+    // Take the values in the `dts` and sort them topologically
+    let mut graph = Graph::new();
+    for dt in lctx.dts.iter() {
+        graph.add_node(dt.clone());
+    }
 
+    compute_all_dt_deps(&lctx, &mut graph);
+    graph.compute_sccs(); 
+
+    // Do datatypes first, then spec functions, then proof functions
     this_thread_start_skipping_nonlean_fields();
 
-    // Loop through the connected component, serializing in order
-    /*
+    // Loop through the datatype connected components and serialize them as they come
+    let representatives = graph.sort_sccs();
+    for rep in representatives.iter() {
+        let scc = graph.get_scc_nodes(rep);
+        // TODO: Mutual blocks around sccs of length greater than 1
+        for dt in scc.iter() {
+            // Skip tuples
+            match dt {
+                Dt::Tuple(..) => { continue }
+                Dt::Path(..) => { 
+                    println!("Datatype: {:?}", dt);
+                    decls.push(serialize_dt(ctx, dt)) 
+                }
+            }
+        }
+    }
+
+    // Loop through the functions in the connected component, serializing in order
     for node in ctx.global.func_call_sccs.iter() {
         match node {
             Node::Fun(f) => {
                 if !lctx.fns.contains(f) { continue; }
-                // println!("Function: {:?}", f);
+                println!("Function: {:?}", f);
                 if let Some(decl) = serialize_fn(ctx, f) {
                     decls.push(decl);
                 }
             }
-            Node::Datatype(dt) => {
-                if !lctx.dts.contains(dt) { continue; }
-                // println!("Datatype: {:?}", dt);
-                decls.push(serialize_dt(ctx, dt));
-            }
             Node::Trait(path) => {
-                // println!("Trait: {:?}", path);
+                println!("Trait: {:?}", path);
             }
             Node::TraitImpl(path) => {
-                // println!("TraitImpl: {:?}", path);
+                println!("TraitImpl: {:?}", path);
             }
-            Node::TraitReqEns(path, b) => {
-                // println!("TraitReqEns: {:?}", path);
+            Node::TraitReqEns(path, ..) => {
+                println!("TraitReqEns: {:?}", path);
             }
             Node::ModuleReveal(path) => {
-                // println!("ModuleReveal: {:?}", path);
+                println!("ModuleReveal: {:?}", path);
             }
-            Node::SpanInfo { span_infos_index, text} => {
-                // println!("SpanInfo: {:?}", text);
+            Node::SpanInfo { text, .. } => {
+                println!("SpanInfo: {:?}", text);
             }
-        }
-    } */
-
-    for dt in lctx.dts.iter() {
-        match dt {
-            Dt::Tuple(..) => { continue }
-            Dt::Path(..) => { decls.push(serialize_dt(ctx, dt)) }
-        }
-    }
-
-    for f in lctx.fns.iter() {
-        let sst = &lctx.ctx.func_sst_map.get(f).unwrap().x;
-        if sst.mode == Mode::Spec {
-            if let Some(decl) = serialize_fn(ctx, f) {
-                decls.push(decl);
-            }
-        }
-    }
-
-    for f in lctx.fns.iter() {
-        let sst = &lctx.ctx.func_sst_map.get(f).unwrap().x;
-        if sst.mode == Mode::Proof {
-            if let Some(decl) = serialize_fn(ctx, f) {
-                decls.push(decl);
-            }
+            _ => { continue; }
         }
     }
 
