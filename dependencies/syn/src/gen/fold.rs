@@ -1302,7 +1302,10 @@ where
         paren_token: node.paren_token,
         expr: Box::new(f.fold_expr(*node.expr)),
         by_token: node.by_token,
-        prover: (node.prover).map(|it| ((it).0, f.fold_ident((it).1))),
+        prover: (node.prover).map(|it|
+            ((it).0,
+             f.fold_ident((it).1),
+             (it).2.map(|via| (via.0, f.fold_ident(via.1))))),
         requires: (node.requires).map(|it| f.fold_requires(it)),
         body: (node.body).map(|it| Box::new(full!(f.fold_block(* it)))),
     }

@@ -1189,6 +1189,10 @@ where
     if let Some(it) = &node.prover {
         skip!((it).0);
         v.visit_ident(&(it).1);
+        if let Some((via, lean_theorem_name)) = &(it).2 {
+            skip!(via);
+            v.visit_ident(lean_theorem_name);
+        }
     }
     if let Some(it) = &node.requires {
         v.visit_requires(it);

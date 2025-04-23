@@ -985,7 +985,7 @@ fn verus_item_to_vir<'tcx, 'a>(
                         mode: AssertQueryMode::BitVector,
                     })
                 }
-                AssertItem::AssertLean => {
+                AssertItem::AssertLean(_) => {
                     unsupported_err_unless!(
                         args_len == 1,
                         expr.span,

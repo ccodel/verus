@@ -1199,6 +1199,10 @@ where
     if let Some(it) = &mut node.prover {
         skip!((it).0);
         v.visit_ident_mut(&mut (it).1);
+        if let Some((via, lean_theorem_name)) = &mut (it).2 {
+            skip!(via);
+            v.visit_ident_mut(lean_theorem_name);
+        }
     }
     if let Some(it) = &mut node.requires {
         v.visit_requires_mut(it);

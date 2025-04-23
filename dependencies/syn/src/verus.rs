@@ -293,7 +293,9 @@ ast_struct! {
         pub expr: Box<Expr>,
         /// by_token is only used if prover and/or body is Some
         pub by_token: Option<Token![by]>,
-        pub prover: Option<(token::Paren, Ident)>,
+        // The optional `via` token is only used in `by (lean via thm_name)`
+        // This is optional, but it ties a Lean assert to a particular name
+        pub prover: Option<(token::Paren, Ident, Option<(Token![via], Ident)>)>,
         pub requires: Option<Requires>,
         pub body: Option<Box<Block>>,
     }
@@ -1115,7 +1117,14 @@ pub mod parsing {
                     let content;
                     let paren_token = parenthesized!(content in input);
                     let id = content.parse()?;
-                    Some((paren_token, id))
+                    let via = if input.peek(token::Via) {
+                        let via_token = input.parse()?;
+                        let lean_theorem_name = content.parse()?;
+                        Some((via_token, lean_theorem_name))
+                    } else {
+                        None
+                    };
+                    Some((paren_token, id, via))
                 } else {
                     None
                 };
@@ -1721,9 +1730,13 @@ mod printing {
             if let Some(by_token) = &self.by_token {
                 if self.prover.is_some() || self.body.is_some() {
                     by_token.to_tokens(tokens);
-                    if let Some((paren, id)) = &self.prover {
+                    if let Some((paren, id, via)) = &self.prover {
                         paren.surround(tokens, |tokens| {
                             id.to_tokens(tokens);
+                            if let Some((via, lean_theorem_name)) = via {
+                                via.to_tokens(tokens);
+                                lean_theorem_name.to_tokens(tokens);
+                            }
                         });
                     }
                     self.requires.to_tokens(tokens);
