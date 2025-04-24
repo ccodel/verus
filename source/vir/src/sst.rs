@@ -333,6 +333,8 @@ pub struct FunctionSstX {
     pub decl: Arc<FuncDeclSst>,
     pub axioms: Arc<FuncAxiomsSst>,
     pub exec_proof_check: Option<Arc<FuncCheckSst>>,
+    #[cfg_attr(any(feature = "lean", feature = "lean-export"),
+    serde(skip_serializing_if = "crate::sst_to_lean::should_skip_lean_fields"))]
     pub recommends_check: Option<Arc<FuncCheckSst>>,
 }
 
