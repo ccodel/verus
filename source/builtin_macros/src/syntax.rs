@@ -2639,7 +2639,7 @@ impl Visitor {
                         );
                     }
                 }
-                "bit_vector" | "nonlinear_arith" | "lean" => {
+                "bit_vector" | "nonlinear_arith" => {
                     let mut block = if let Some(block) = assert.body {
                         *block
                     } else {
@@ -2669,10 +2669,22 @@ impl Visitor {
                     } else if prover_id == "nonlinear_arith" {
                         quote_verbatim!(builtin, span, attrs => #builtin::assert_nonlinear_by(#block))
                     } else {
+                        // TODO: Currently a dead code branch, restore later with "lean" branch
                         assert_eq!(prover_id, "lean");
                         quote_verbatim!(builtin, span, attrs => #builtin::assert_lean_by(#block))
                     };
                     *expr = Expr::Verbatim(quote_spanned!(span => {#assert_x_by}));
+                }
+                "lean" => {
+                    if assert.body.is_some() {
+                        *expr = quote_verbatim!(span, attrs => compile_error!("the 'lean' prover does not support a body"));
+                    } else if assert.requires.is_some() {
+                        *expr = quote_verbatim!(span, attrs => compile_error!("the 'lean' prover does not support a 'requires' clause"));
+                    } else {
+                        *expr = Expr::Verbatim(
+                            quote_spanned_builtin!(builtin, span => #builtin::assert_lean_by(#arg)),
+                        );
+                    }
                 }
                 _ => {
                     *expr = quote_verbatim!(span, attrs => compile_error!("unknown prover name for assert-by (supported provers: 'compute_only', 'compute', 'bit_vector', 'nonlinear_arith', and 'lean')"));
