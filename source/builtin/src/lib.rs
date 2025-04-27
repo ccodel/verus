@@ -358,7 +358,7 @@ pub fn assert_bitvector_by(_: ()) {
 #[cfg(verus_keep_ghost)]
 #[rustc_diagnostic_item = "verus::verus_builtin::assert_lean_by"]
 #[verifier::proof]
-pub fn assert_lean_by(_: bool) {
+pub fn assert_lean(_: bool) {
     unimplemented!();
 }
 
