@@ -2666,24 +2666,53 @@ impl Visitor {
                     block.stmts.splice(0..0, stmts);
                     let assert_x_by: Expr = if prover_id == "bit_vector" {
                         quote_verbatim!(builtin, span, attrs => #builtin::assert_bitvector_by(#block))
-                    } else if prover_id == "nonlinear_arith" {
-                        quote_verbatim!(builtin, span, attrs => #builtin::assert_nonlinear_by(#block))
                     } else {
-                        // TODO: Currently a dead code branch, restore later with "lean" branch
-                        assert_eq!(prover_id, "lean");
-                        quote_verbatim!(builtin, span, attrs => #builtin::assert_lean_by(#block))
+                        quote_verbatim!(builtin, span, attrs => #builtin::assert_nonlinear_by(#block))
                     };
                     *expr = Expr::Verbatim(quote_spanned!(span => {#assert_x_by}));
                 }
                 "lean" => {
                     if assert.body.is_some() {
                         *expr = quote_verbatim!(span, attrs => compile_error!("the 'lean' prover does not support a body"));
-                    } else if assert.requires.is_some() {
-                        *expr = quote_verbatim!(span, attrs => compile_error!("the 'lean' prover does not support a 'requires' clause"));
                     } else {
                         *expr = Expr::Verbatim(
-                            quote_spanned_builtin!(builtin, span => #builtin::assert_lean_by(#arg)),
+                            quote_spanned_builtin!(builtin, span => #builtin::assert_lean(#arg)),
                         );
+
+                        // let mut stmts: Vec<Stmt> = Vec::new();
+                        /* if let Some(Requires { token, exprs }) = &assert.requires {
+                            let requires = Expr::Verbatim(
+                                quote_spanned_builtin!(builtin, token.span => #builtin::requires([#exprs])),
+                            );
+                            *expr = Expr::Verbatim(
+                                quote_spanned_builtin!(builtin, token.span => #builtin::assert_lean(#requires, #arg)),
+                            );
+                        } else {
+                            *expr = Expr::Verbatim(
+                                quote_spanned_builtin!(builtin, span => #builtin::assert_lean(#arg)),
+                            );
+                        } */
+
+                        /* if let Some(Requires { token, exprs }) = &assert.requires {
+                            let requires = Expr::Verbatim(
+                                quote_spanned_builtin!(builtin, token.span => #builtin::requires([#exprs])),
+                            );
+                            stmts.push(Stmt::Expr(
+                                requires,
+                                Some(Semi { spans: [token.span] }),
+                            ));
+                        }
+
+                        stmts.push(Stmt::Expr(
+                            Expr::Verbatim(
+                                quote_spanned_builtin!(builtin, span => #builtin::ensures(#arg)),
+                            ),
+                            Some(Semi { spans: [span] }),
+                        ));
+                        
+                        *expr = Expr::Verbatim(
+                            quote_spanned_builtin!(builtin, span => #builtin::assert_lean(#stmts))
+                        ); */
                     }
                 }
                 _ => {

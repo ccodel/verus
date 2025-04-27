@@ -625,6 +625,8 @@ pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
 
     // Visit all of the functions to check for `by (lean)` attributes
     for sst in krate.functions.iter() {
+        // Spec functions cannot contain `by (lean)`, so we skip them
+        if sst.x.mode == Mode::Spec { continue; }
         lvisit_func_sst(&mut lctx, sst);
     }
     

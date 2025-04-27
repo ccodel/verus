@@ -485,7 +485,7 @@ fn verus_items_map() -> Vec<(&'static str, VerusItem)> {
         ("verus::builtin::assert_bitvector_by",     VerusItem::Assert(AssertItem::AssertBitvectorBy)),
         ("verus::builtin::assert_forall_by",        VerusItem::Assert(AssertItem::AssertForallBy)),
         ("verus::builtin::assert_bit_vector",       VerusItem::Assert(AssertItem::AssertBitVector)),
-        ("verus::builtin::assert_lean_by",          VerusItem::Assert(AssertItem::AssertLean)),
+        ("verus::builtin::assert_lean",             VerusItem::Assert(AssertItem::AssertLean)),
         ("verus::builtin::use_type_invariant",      VerusItem::UseTypeInvariant),
 
         ("verus::builtin::with_triggers",           VerusItem::WithTriggers),
