@@ -1,16 +1,15 @@
 use crate::context::Ctx;
-use air::ast::Binders;
 use crate::ast::{
-    Typ, TypX, Typs, Datatype, DatatypeX, Dt, Fun, PathX, Mode, Variant, VarBinder, VarBinders,
+    Typ, TypX, Typs, Datatype, DatatypeX, Dt, Fun, NullaryOpr, PathX, Mode, Variant, VarBinder, VarBinders,
 };
 use crate::ast_util::types_equal;
 use crate::sst::{
-    Bnd, BndX, Dest, Exp, Exps, ExpX, FuncDeclSst, LoopInv, LoopInvs, Par, Pars, Stm, Stms, StmX, CallFun, KrateSst, FunctionSst, FuncCheckSst
+    Bnd, BndX, Dest, Exp, Exps, ExpX, FuncDeclSst, LoopInv, LoopInvs, Par, Pars, Stm, Stms, StmX, CallFun, KrateSst, FunctionSst,
 };
 use crate::scc::Graph;
 use crate::recursion::Node;
 
-use std::collections::{HashSet, HashMap};
+use std::collections::HashSet;
 
 // For the global variable LEAN_SERIALIZING_THREADS
 use lazy_static::lazy_static;
@@ -22,15 +21,6 @@ use std::io::Write;
 
 ////////////////////////////////////////////////////////////////////////////////
 
-/// Function serialization "level".
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-enum FnLevel {
-    Accum,
-    ByLean,
-    ContainsByLean,
-    ByLeanAndContainsByLean,
-}
-
 /// A Lean context.
 /// 
 /// Contains a `Ctx`, and `HashSet`s of already-processed
@@ -39,53 +29,32 @@ enum FnLevel {
 /// while also logging which objects are needed in the Lean serialization.
 struct LeanCtx<'a> {
     ctx: &'a Ctx,
-    enclosing_fun: Option<Fun>,
-    fun_stack: Vec<Fun>,
-    by_lean: u32,
+    current_fun: Option<Fun>,
+    found_by_lean: bool,
     total_by_lean: u32,
     // Mark down which definitions we've seen already
     typs: Vec<Typ>, // CC: Replace with manual hash set/map later?
     dts: HashSet<Dt>,
-    fns: HashMap<Fun, FnLevel>,
-    asserts_to_serialize: Vec<(Exp, Fun)>,
+    fns: HashSet<Fun>,
+    asserts_to_serialize: Vec<(&'a Exp, Fun)>,
 }
 
-fn inc_by_lean(lctx: &mut LeanCtx) {
-    lctx.by_lean += 1;
+fn start_by_lean(lctx: &mut LeanCtx) {
+    lctx.found_by_lean = true;
     lctx.total_by_lean += 1;
 }
 
-fn dec_by_lean(lctx: &mut LeanCtx) {
-    lctx.by_lean -= 1;
+fn stop_by_lean(lctx: &mut LeanCtx) {
+    lctx.found_by_lean = false;
 }
 
-fn set_fn_level(lctx: &mut LeanCtx, f: &Fun, level: FnLevel) {
-    assert!(level != FnLevel::ByLeanAndContainsByLean);
-
-    let stored_level = lctx.fns.get_mut(f);
-    if stored_level.is_none() {
-        lctx.fns.insert(f.clone(), level);
-    } else {
-        let stored_level = stored_level.unwrap();
-        if *stored_level == FnLevel::ByLean && level == FnLevel::ContainsByLean
-            || *stored_level == FnLevel::ContainsByLean && level == FnLevel::ByLean {
-            *stored_level = FnLevel::ByLeanAndContainsByLean;
-        } else if level != FnLevel::Accum {
-            *stored_level = level;
-        }
-    }
-}
-
-fn set_fn_level_if_matching(lctx: &mut LeanCtx, level: FnLevel) {
-    let Some(enclosing_fun) = &lctx.enclosing_fun else { return; };
-    if lctx.fun_stack.starts_with(&[enclosing_fun.clone()]) {
-        set_fn_level(lctx, &enclosing_fun.clone(), level);
-    }
+fn is_by_lean_active(lctx: &LeanCtx) -> bool {
+    lctx.found_by_lean
 }
 
 // TODO: Don't clone, work with lifetimes to say that `LeanCtx` and `Exp` come from the same place
-fn add_by_lean_assertion(lctx: &mut LeanCtx, exp: &Exp) {
-    lctx.asserts_to_serialize.push((exp.clone(), lctx.enclosing_fun.clone().unwrap()));
+fn add_by_lean_assertion<'lctx>(lctx: &mut LeanCtx<'lctx>, exp: &'lctx Exp) {
+    lctx.asserts_to_serialize.push((exp, lctx.current_fun.clone().unwrap()));
 }
 
 /*
@@ -147,7 +116,7 @@ trait LeanVisitor {
 }
 
 fn lvisit_datatype(lctx: &mut LeanCtx, datatype: &Datatype) {
-    if lctx.by_lean == 0 { return; }
+    if !is_by_lean_active(lctx) { return; }
 
     let DatatypeX { variants, .. } = &datatype.x;
     for variant in variants.iter() {
@@ -160,7 +129,7 @@ fn lvisit_datatype(lctx: &mut LeanCtx, datatype: &Datatype) {
 }
 
 fn lvisit_dt(lctx: &mut LeanCtx, dt: &Dt) {
-    if lctx.by_lean == 0 { return; }
+    if !is_by_lean_active(lctx) { return; }
 
     // Only process this datatype if we haven't seen it before
     if lctx.dts.contains(dt) { return; }
@@ -172,7 +141,7 @@ fn lvisit_dt(lctx: &mut LeanCtx, dt: &Dt) {
 }
 
 fn lvisit_typ(lctx: &mut LeanCtx, typ: &Typ) {
-    if lctx.by_lean == 0 { return; }
+    if !is_by_lean_active(lctx) { return; }
 
     // Note: Because `TypX` cannot implement the traits `Eq` or `PartialEq`
     //       (see the note in vir/src/ast.rs), we cannot use a `HashSet`
@@ -212,7 +181,8 @@ fn lvisit_typ(lctx: &mut LeanCtx, typ: &Typ) {
 }
 
 fn lvisit_typs(lctx: &mut LeanCtx, typs: &Typs) {
-    if lctx.by_lean == 0 { return; }
+    if !is_by_lean_active(lctx) { return; }
+
     for typ in typs.iter() {
         lvisit_typ(lctx, &typ);
     }
@@ -240,7 +210,7 @@ fn lvisit_varbinders_exp(lctx: &mut LeanCtx, binders: &VarBinders<Exp>) {
 }
 
 fn lvisit_bnd(lctx: &mut LeanCtx, bnd: &Bnd) {
-    if lctx.by_lean == 0 { return; }
+    if !is_by_lean_active(lctx) { return; }
 
     match &bnd.x {
         BndX::Let(binders) => {
@@ -270,8 +240,8 @@ fn lvisit_loop_invs(lctx: &mut LeanCtx, invs: &LoopInvs) {
 }
 
 fn lvisit_fun(lctx: &mut LeanCtx, fun: &Fun) {
-    if lctx.by_lean == 0 { return; }
-    if lctx.fns.contains_key(fun) { return; }
+    if !is_by_lean_active(lctx) { return; }
+    if lctx.fns.contains(fun) { return; }
 
     // TODO are there any problems with one polymorphic function but multiple instantiations?
     let sst= lctx.ctx.func_sst_map.get(fun).unwrap();
@@ -291,8 +261,29 @@ fn lvisit_call_fun(lctx: &mut LeanCtx, call_fun: &CallFun) {
     }
 }
 
+fn lvisit_nullary_opr(lctx: &mut LeanCtx, op: &NullaryOpr) {
+    match op {
+        // TODO: Visit traits? (Add them as type-classes later)
+        NullaryOpr::ConstGeneric(typ) => {
+            lvisit_typ(lctx, typ);
+        }
+        NullaryOpr::TraitBound(_, typs) => {
+            lvisit_typs(lctx, typs);
+        }
+        NullaryOpr::TypEqualityBound(_, typs, _, typ) => {
+            lvisit_typs(lctx, typs);
+            lvisit_typ(lctx, typ);
+        }
+        NullaryOpr::ConstTypBound(typ1, typ2) => {
+            lvisit_typ(lctx, typ1);
+            lvisit_typ(lctx, typ2);
+        }
+        _ => {}
+    }
+}
+
 fn lvisit_exp(lctx: &mut LeanCtx, exp: &Exp) {
-    if lctx.by_lean == 0 { return; }
+    if !is_by_lean_active(lctx) { return; }
 
     // To ensure we don't miss any types, we visit the type of *every* expression
     // However, we keep around a list of unique types, so while these calls are
@@ -300,12 +291,17 @@ fn lvisit_exp(lctx: &mut LeanCtx, exp: &Exp) {
     lvisit_typ(lctx, &exp.typ);
 
     match &exp.x {
+        // Skip ExpX::Const     (no new context to visit)
+        // Skip ExpX::Var       (no new context to visit)
         ExpX::StaticVar(fun) => {
             lvisit_fun(lctx, fun);
         }
+        // Skip ExpX::VarLoc    (no new context to visit)
+        // Skip ExpX::VarAt     (no new context to visit)
         ExpX::Loc(exp) => {
             lvisit_exp(lctx, exp);
         }
+        // Skip ExpX::Old       (no new context to visit)
         ExpX::Call(call_fun, typs, exps) => {
             lvisit_call_fun(lctx, call_fun);
             lvisit_typs(lctx, typs);
@@ -321,17 +317,15 @@ fn lvisit_exp(lctx: &mut LeanCtx, exp: &Exp) {
                 lvisit_exp(lctx, &binder.a);
             }
         }
-        ExpX::Unary(_, exp) => {
+        ExpX::NullaryOpr(op) => {
+            lvisit_nullary_opr(lctx, op);
+        }
+        ExpX::Unary(_, exp)
+        | ExpX::UnaryOpr(_, exp) => {
             lvisit_exp(lctx, exp);
         }
-        ExpX::UnaryOpr(_, exp) => {
-            lvisit_exp(lctx, exp);
-        }
-        ExpX::Binary(_, exp1, exp2) => {
-            lvisit_exp(lctx, exp1);
-            lvisit_exp(lctx, exp2);
-        }
-        ExpX::BinaryOpr(_, exp1, exp2) => {
+        ExpX::Binary(_, exp1, exp2)
+        | ExpX::BinaryOpr(_, exp1, exp2) => {
             lvisit_exp(lctx, exp1);
             lvisit_exp(lctx, exp2);
         }
@@ -364,7 +358,7 @@ fn lvisit_dest(lctx: &mut LeanCtx, dest: &Dest) {
     lvisit_exp(lctx, &dest.dest);
 }
 
-fn lvisit_stm(lctx: &mut LeanCtx, stm: &Stm) {
+fn lvisit_stm<'lctx>(lctx: &mut LeanCtx<'lctx>, stm: &'lctx Stm) {
     match &stm.x {
         StmX::Call { fun, typ_args, args, dest, .. } => {
             // TODO resolved method?
@@ -393,11 +387,10 @@ fn lvisit_stm(lctx: &mut LeanCtx, stm: &Stm) {
             lvisit_exp(lctx, exp);
         }
         StmX::AssertLean(exp) => {
-            inc_by_lean(lctx);
-            set_fn_level_if_matching(lctx, FnLevel::ContainsByLean);
+            start_by_lean(lctx);
             add_by_lean_assertion(lctx, exp);
             lvisit_exp(lctx, exp);
-            dec_by_lean(lctx);
+            stop_by_lean(lctx);
         }
         StmX::Assume(exp) => {
             lvisit_exp(lctx, exp);
@@ -449,7 +442,7 @@ fn lvisit_stm(lctx: &mut LeanCtx, stm: &Stm) {
     }
 }
 
-fn lvisit_stms(lctx: &mut LeanCtx, stms: &Stms) {
+fn lvisit_stms<'lctx>(lctx: &mut LeanCtx<'lctx>, stms: &'lctx Stms) {
     for stm in stms.iter() {
         lvisit_stm(lctx, stm);
     }
@@ -474,65 +467,52 @@ fn lvisit_func_decl_sst(lctx: &mut LeanCtx, sst: &FuncDeclSst) {
     lvisit_exps(lctx, &sst.enss);
 }
 
-fn lvisit_func_sst(lctx: &mut LeanCtx, sst: &FunctionSst) {
+fn lvisit_func_sst<'lctx>(lctx: &mut LeanCtx<'lctx>, sst: &'lctx FunctionSst) {
     let sst = &sst.x;
     let f = &sst.name;
 
     // Skip the function if we've done a Lean analysis
-    let level = lctx.fns.get(f);
-    if let Some(level) = level {
-        if *level != FnLevel::Accum { return; }
-    }
+    if lctx.fns.contains(f) { return; }
 
-    if lctx.by_lean == 0 {
+    if !is_by_lean_active(lctx) {
         // If we haven't encountered a `by (lean)` yet,
         // see if this is a proof function with a `by (lean)` attribute
         let Some(proof) = &sst.exec_proof_check else { return; };
 
         if sst.attrs.lean {
-            inc_by_lean(lctx);
-            set_fn_level(lctx, f, FnLevel::ByLean);
-            lctx.enclosing_fun = Some(f.clone());
-            lctx.fun_stack.push(f.clone());
+            lctx.fns.insert(f.clone());
+            start_by_lean(lctx);
+            lctx.current_fun = Some(f.clone());
 
             lvisit_pars(lctx, &sst.pars);
-            lvisit_par(lctx, &sst.ret);
+            // lvisit_par(lctx, &sst.ret); // Enforced to be empty
             lvisit_exps(lctx, &proof.reqs);
             lvisit_exps(lctx, &proof.post_condition.ens_exps);
+            // lvisit_stm(lctx, &proof.body); // Enforced to be empty
 
-            // TODO: What if `by (lean)` appears in both body and function?
-            lvisit_stm(lctx, &proof.body);
-
-            lctx.fun_stack.pop();
-            lctx.enclosing_fun = None;
-            dec_by_lean(lctx);
+            lctx.current_fun = None;
+            stop_by_lean(lctx);
         } else {
             // Ignore the function's parameters and its requires/ensures
             // Instead, scan the function body to find any Lean asserts
-            set_fn_level(lctx, f, FnLevel::Accum);
-            lctx.enclosing_fun = Some(f.clone());
-            lctx.fun_stack.push(f.clone());
-
+            lctx.current_fun = Some(f.clone());
             lvisit_stm(lctx, &proof.body);
-
-            lctx.fun_stack.pop();
-            lctx.enclosing_fun = None;
+            lctx.current_fun = None;
         }
     } else {
-        // Only accumulate the function
-        // This means visiting the types of its parameters and its body
-        // This should never be a proof function
-        assert!(sst.mode != Mode::Proof);
+        match sst.mode {
+            Mode::Proof => { unreachable!("Cannot call proof functions from a `by (lean)` statement"); }
+            Mode::Exec => { unreachable!("Cannot call exec functions from a `by (lean)` statement"); }
+            Mode::Spec => {
+                lctx.fns.insert(f.clone());
+                lvisit_pars(lctx, &sst.pars);
+                lvisit_par(lctx, &sst.ret);
 
-        set_fn_level(lctx, f, FnLevel::Accum);
-        lctx.fun_stack.push(f.clone());
-
-        lvisit_pars(lctx, &sst.pars);
-        lvisit_par(lctx, &sst.ret);
-        sst.axioms.spec_axioms.as_ref()
-            .map(|axioms| lvisit_exp(lctx, &axioms.body_exp));
-
-        lctx.fun_stack.pop();
+                // A spec function's body is found in the `spec_axioms`
+                sst.axioms.spec_axioms.as_ref()
+                    .map(|axioms| lvisit_exp(lctx, &axioms.body_exp));
+            }
+        }
     }
 }
 
@@ -613,13 +593,12 @@ fn compute_all_dt_deps(lctx: &LeanCtx, graph: &mut Graph<Dt>) {
 pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
     let mut lctx = LeanCtx {
         ctx,
-        enclosing_fun: None,
-        fun_stack: Vec::new(),
-        by_lean: 0,
+        current_fun: None,
+        found_by_lean: false,
         total_by_lean: 0,
         typs: Vec::new(),
         dts: HashSet::new(),
-        fns: HashMap::new(),
+        fns: HashSet::new(),
         asserts_to_serialize: Vec::new(),
     };
 
@@ -633,7 +612,7 @@ pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
     // Don't serialize anything if there are no `by (lean)` attributes
     if lctx.total_by_lean == 0 { return; }
 
-    // The top-level JSON object is an array, so we push declarations onto `decls`
+    // The top-level JSON object is an array under the key "decls"
     let mut decls: Vec<serde_json::Value> = Vec::new();
 
     // Take the values in the `dts` and sort them topologically
@@ -654,13 +633,10 @@ pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
         let scc = graph.get_scc_nodes(rep);
         // TODO: Mutual blocks around sccs of length greater than 1
         for dt in scc.iter() {
-            // Skip tuples
+            // Skip tuples, since they are handled natively by `Prod` in Lean
             match dt {
                 Dt::Tuple(..) => { continue }
-                Dt::Path(..) => { 
-                    println!("Datatype: {:?}", dt);
-                    decls.push(serialize_dt(ctx, dt)) 
-                }
+                Dt::Path(..) => { decls.push(serialize_dt(ctx, dt)) }
             }
         }
     }
@@ -669,28 +645,20 @@ pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
     for node in ctx.global.func_call_sccs.iter() {
         match node {
             Node::Fun(f) => {
-                let Some(level) = lctx.fns.get(f) else { continue; };
-                match level {
-                    FnLevel::Accum
-                    | FnLevel::ByLean
-                    | FnLevel::ByLeanAndContainsByLean => {
-                        println!("Level for function: {:?} {:?}", level, f);
-                        if let Some(decl) = serialize_fn(ctx, f) {
-                            decls.push(decl);
-                        }
-                    }
-                    FnLevel::ContainsByLean => {}
+                if lctx.fns.contains(f) {
+                    decls.push(serialize_fn(ctx, f).unwrap());
                 }
             }
+            // TODO traits, etc.
             _ => { continue; }
         }
     }
 
     // Make any assertion theorems
     // TODO: Loop through the assertions we have and serialize them in order
-    let mut assert_counter = 0;
-    for (a, _) in lctx.asserts_to_serialize.iter() {
-        let assert = serialize_assert(ctx, a, assert_counter);
+    let mut assert_counter = 1;
+    for (assert, f) in lctx.asserts_to_serialize.iter() {
+        let assert = serialize_assert(ctx, assert, f, assert_counter);
         decls.push(assert);
         assert_counter += 1;
     }
@@ -749,9 +717,6 @@ const SPEC_FUN_DECL: &str = "SpecFn";
 const PROOF_FUN_DECL: &str = "ProofFn";
 const ASSERT_DECL: &str = "Assert";
 
-// These are for facts proven by Verus
-const AXIOM_DECL: &str = "VerusTheorem";
-
 impl PathX {
     pub fn to_str(&self) -> String {
         self.krate.iter().chain(self.segments.iter())
@@ -789,11 +754,12 @@ fn serialize_fn(ctx: &Ctx, fun: &Fun) -> Option<serde_json::Value> {
 }
 
 // Serializes the expression under the assertion
-fn serialize_assert(_ : &Ctx, e: &Exp, id: u32) -> serde_json::Value {
+fn serialize_assert(_ : &Ctx, e: &Exp, f: &Fun, id: u32) -> serde_json::Value {
     serde_json::json! {
         {
             DECL_TYPE: ASSERT_DECL,
             "AssertId": id,
+            "ParentFn": f,
             DECL_VAL: e,
         }
     }
