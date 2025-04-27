@@ -989,34 +989,30 @@ fn verus_item_to_vir<'tcx, 'a>(
                     unsupported_err_unless!(
                         args_len == 1,
                         expr.span,
-                        "expected assert_by_compute",
+                        "expected assert_lean",
                         &args
                     );
+
                     let exp = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
                     mk_expr(ExprX::AssertLean(exp))
 
-                    // CC: We don't want to add Lean as a QueryMode,
-                    //     We instead add AssertLean to `ExprX`
                     /*
-                    let vir_expr = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
-                    let requires = Arc::new(vec![bctx.spanned_typed_new(
+                    // Include any `requires` as premises for the body
+                    // TODO: Error check for the rest of the header being empty
+                    let mut vir_expr = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
+                    let header = vir::headers::read_header(&mut vir_expr)?;
+                    unsupported_err_unless!(
+                        header.ensure.len() == 0,
                         expr.span,
-                        &Arc::new(TypX::Bool),
-                        ExprX::Const(Constant::Bool(true)),
-                    )]);
-                    let ensures = Arc::new(vec![vir_expr]);
-                    let proof = bctx.spanned_typed_new(
-                        expr.span,
-                        &unit_typ(),
-                        ExprX::Block(Arc::new(vec![]), None),
+                        "assert_lean cannot have ensures",
+                        &args
                     );
-                    mk_expr(ExprX::AssertQuery {
-                        requires,
-                        ensures,
-                        proof,
-                        mode: AssertQueryMode::ByLean,
-                    })
-                    */
+
+                    // Process the requires statements in reverse order
+                    // (currying them with right-associative arrows)
+                    for req in header.require.iter().rev() {
+                        exp = mk_expr(ExprX::Binary(BinaryOp::Implies, req.clone(), exp))?;
+                    } */
                 }
             }
         }
