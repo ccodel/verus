@@ -171,7 +171,11 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
             })?;
             Ok(stm.new_x(StmX::AssertBitVector { requires: reqs.into(), ensures: ens.into() }))
         }
-        #[cfg(not(any(feature = "lean", feature = "lean-export")))]
+        // If we don't have Lean compilation options turned on, throw an error
+        // Note that when Lean options are on, we keep the node as-is
+        // This is because the serialization code needs to see the `AssertLean` node
+        // in verifier.rs after the call to this function
+        #[cfg(not(feature = "lean"))]
         StmX::AssertLean(exp) => {
             let err = error_with_label(
                 &exp.span.clone(),
