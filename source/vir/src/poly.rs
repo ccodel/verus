@@ -801,11 +801,11 @@ fn visit_stm(ctx: &Ctx, state: &mut State, stm: &Stm) -> Stm {
         StmX::AssertCompute(..) => panic!("AssertCompute should be removed by sst_elaborate"),
         StmX::AssertLean(_e1) => {
             // If we *don't* have Lean compilations turned on, throw an error
-            #[cfg(not(any(feature = "lean", feature = "lean-export")))]
-            { panic!("AssertLean cannot be processed without `lean` or `lean-export` features") }
+            #[cfg(not(feature = "lean"))]
+            { panic!("AssertLean cannot be processed without the `lean` feature") }
             
             // If we *do* have Lean compilations turned on, process the expression
-            #[cfg(any(feature = "lean", feature = "lean-export"))]
+            #[cfg(feature = "lean")]
             { mk_stm(StmX::AssertLean(visit_exp_native(ctx, state, _e1))) }
         }
         StmX::Assume(e1) => {

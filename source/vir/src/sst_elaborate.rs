@@ -145,7 +145,7 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
         // Note that when Lean options are on, we keep the node as-is
         // This is because the serialization code needs to see the `AssertLean` node
         // in verifier.rs after the call to this function
-        #[cfg(not(any(feature = "lean", feature = "lean-export")))]
+        #[cfg(not(feature = "lean"))]
         StmX::AssertLean(exp) => {
             let err = error_with_label(
                 &exp.span.clone(),

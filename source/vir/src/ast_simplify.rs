@@ -34,7 +34,8 @@ use air::scope_map::ScopeMap;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-#[cfg(any(feature = "lean-export", feature = "lean"))]
+// Only track the original form of data types if Lean is enabled
+#[cfg(feature = "lean")]
 use crate::ast::DtType;
 
 struct State {
@@ -1220,7 +1221,7 @@ pub fn simplify_krate(ctx: &mut GlobalCtx, krate: &Krate) -> Result<Krate, VirEr
         let variants = Arc::new(vec![variant]);
         let datatypex = DatatypeX {
             name: Dt::Tuple(arity),
-            #[cfg(any(feature = "lean-export", feature = "lean"))]
+            #[cfg(feature = "lean")]
             dt_type: DtType::Tuple,
             proxy: None,
             visibility,
@@ -1274,7 +1275,7 @@ pub fn simplify_krate(ctx: &mut GlobalCtx, krate: &Krate) -> Result<Krate, VirEr
 
         let datatypex = DatatypeX {
             name: Dt::Path(path),
-            #[cfg(any(feature = "lean-export", feature = "lean"))]
+            #[cfg(feature = "lean")]
             dt_type: DtType::Closure,
             proxy: None,
             visibility,

@@ -4,12 +4,12 @@ use crate::ast::{
 };
 use crate::ast_util::types_equal;
 use crate::sst::{
-    Bnd, BndX, Dest, Exp, Exps, ExpX, FuncDeclSst, LoopInv, LoopInvs, Par, Pars, Stm, Stms, StmX, CallFun, KrateSst, FunctionSst,
+    Bnd, BndX, Dest, Exp, Exps, ExpX, LoopInv, LoopInvs, Par, Pars, Stm, Stms, StmX, CallFun, KrateSst, FunctionSst,
 };
 use crate::scc::Graph;
 use crate::recursion::Node;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 // For the global variable LEAN_SERIALIZING_THREADS
 use lazy_static::lazy_static;
@@ -111,9 +111,9 @@ fn this_thread_stop_skipping_nonlean_fields() {
 
 // CC TODO: This should probably be a trait like this.
 // so that eg Spanned, SpannedTyped, Binder, VarBinder, etc. can be polymorphically implemented
-trait LeanVisitor {
-    fn lvisit(lctx: &mut LeanCtx, x: &Self);
-}
+// trait LeanVisitor {
+//     fn lvisit(lctx: &mut LeanCtx, x: &Self);
+// }
 
 fn lvisit_datatype(lctx: &mut LeanCtx, datatype: &Datatype) {
     if !is_by_lean_active(lctx) { return; }
@@ -459,14 +459,6 @@ fn lvisit_pars(lctx: &mut LeanCtx, pars: &Pars) {
     }
 }
 
-fn lvisit_func_decl_sst(lctx: &mut LeanCtx, sst: &FuncDeclSst) {
-    lvisit_pars(lctx, &sst.req_inv_pars);
-    lvisit_pars(lctx, &sst.ens_pars);
-    lvisit_pars(lctx, &sst.post_pars);
-    lvisit_exps(lctx, &sst.reqs);
-    lvisit_exps(lctx, &sst.enss);
-}
-
 fn lvisit_func_sst<'lctx>(lctx: &mut LeanCtx<'lctx>, sst: &'lctx FunctionSst) {
     let sst = &sst.x;
     let f = &sst.name;
@@ -624,7 +616,7 @@ pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
     compute_all_dt_deps(&lctx, &mut graph);
     graph.compute_sccs(); 
 
-    // Do datatypes first, then spec functions, then proof functions
+    // Serialize everything!
     this_thread_start_skipping_nonlean_fields();
 
     // Loop through the datatype connected components and serialize them as they come
@@ -654,15 +646,19 @@ pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
         }
     }
 
-    // Make any assertion theorems
-    // TODO: Loop through the assertions we have and serialize them in order
-    let mut assert_counter = 1;
+    // Serialize any `assert(...) by (lean)` as independent Lean theorems
+    // Each assertion is associated with its containing function
+    // The `fun_assert_map` maintains a per-function count of assertions
+    // TODO: Serialize the assertions in order of the functions in the SCCs
+    let mut fun_assert_map: HashMap<&Fun, u32> = HashMap::new();
     for (assert, f) in lctx.asserts_to_serialize.iter() {
-        let assert = serialize_assert(ctx, assert, f, assert_counter);
+        let counter = *fun_assert_map.get(f).unwrap_or(&1);
+        let assert = serialize_assert(ctx, assert, f, counter);
         decls.push(assert);
-        assert_counter += 1;
+        fun_assert_map.insert(f, counter + 1);
     }
 
+    // We are done serializing the SST objects now
     this_thread_stop_skipping_nonlean_fields();
 
     let module_name = ctx.module_path().to_str();

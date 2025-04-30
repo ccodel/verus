@@ -595,7 +595,7 @@ pub enum Constant {
 pub struct SpannedTyped<X> {
     // Since the `Span` struct is not (yet) useful to Lean,
     // we skip it if we are doing a Lean serialization
-    #[cfg_attr(any(feature = "lean", feature = "lean-export"),
+    #[cfg_attr(feature = "lean",
         serde(skip_serializing_if = "crate::sst_to_lean::should_skip_lean_fields"))]
     pub span: Span,
     pub typ: Typ,
@@ -1208,9 +1208,10 @@ pub enum Dt {
     Tuple(usize),
 }
 
-#[cfg_attr(any(feature = "lean", feature = "lean-export"),
+// Only track the original forms of datatypes if Lean is enabled
+#[cfg_attr(feature = "lean",
     derive(Clone, Debug, Serialize, Deserialize, ToDebugSNode, Hash, PartialEq, Eq))]
-#[cfg(any(feature = "lean", feature = "lean-export"))]
+#[cfg(feature = "lean")]
 pub enum DtType {
     Struct,
     Enum,
@@ -1224,7 +1225,7 @@ pub enum DtType {
 #[derive(Clone, Debug, Serialize, Deserialize, ToDebugSNode)]
 pub struct DatatypeX {
     pub name: Dt,
-    #[cfg(any(feature = "lean-export", feature = "lean"))]
+    #[cfg(feature = "lean")]
     pub dt_type: DtType,
     /// Similar to FunctionX proxy field.
     /// If this datatype is declared via a proxy (a type labeled external_type_specification)

@@ -22,5 +22,4 @@ lazy_static = "1.5.0"
 [features]
 singular = ["air/singular"]
 axiom-usage-info = ["air/axiom-usage-info"]
-lean-export = ["air/lean-export", "air/lean"]
-lean = []
+lean = ["air/lean"]

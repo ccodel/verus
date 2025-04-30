@@ -20,5 +20,4 @@ win32job = "1"
 [features]
 singular = []
 axiom-usage-info = []
-lean-export = []
 lean = []
