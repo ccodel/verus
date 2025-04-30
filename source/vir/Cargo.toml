@@ -21,5 +21,4 @@ lazy_static = "1.5.0"
 
 [features]
 singular = ["air/singular"]
-lean-export = ["air/lean-export", "air/lean"]
-lean = []
+lean = ["air/lean"]

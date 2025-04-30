@@ -70,7 +70,7 @@ enum Life {
 
 // (4/27) these currently fail due to `match` translations from Verus to Lean
 
-/* use Life::*;
+use Life::*;
 
 spec fn is_insect(l: Life) -> bool
 {
@@ -81,13 +81,13 @@ spec fn cuddly(l: Life) -> bool
 {
     ||| l matches Mammal { legs, .. } && legs == 4
     ||| l matches Arthropod { legs, wings } && legs == 8 && wings == 0
-} */
+}
 
 
 fn main()
 {
-    // assert(!is_insect(Life::Mammal { legs: 4, has_pocket: true })) by (lean);
-    // assert(cuddly(Life::Mammal { legs: 4, has_pocket: true })) by (lean);
+    assert(!is_insect(Life::Mammal { legs: 4, has_pocket: true })) by (lean);
+    assert(cuddly(Life::Mammal { legs: 4, has_pocket: true })) by (lean);
 }
 
 } // verus!

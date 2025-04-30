@@ -720,7 +720,7 @@ pub struct Spanned<X> {
     // Since the `Span` struct is not (yet) useful to Lean,
     // we skip it if we are doing a Lean serialization
     // TODO: Make `x` transparent for Serde if `Span` is skipped
-    #[cfg_attr(any(feature = "lean", feature = "lean-export"),
+    #[cfg_attr(feature = "lean",
         serde(skip_serializing_if = "crate::sst_to_lean::should_skip_lean_fields"))]
     pub span: Span,
     pub x: X,

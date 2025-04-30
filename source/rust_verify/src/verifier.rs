@@ -43,7 +43,8 @@ use vir::def::{
 };
 use vir::prelude::PreludeConfig;
 
-#[cfg(any(feature = "lean", feature = "lean-export"))]
+// Only serialize VCs to JSON if the Lean feature is enabled
+#[cfg(feature = "lean")]
 use vir::sst_to_lean::serialize_crate_for_lean;
 
 const RLIMIT_PER_SECOND: f32 = 3000000f32;

@@ -344,7 +344,7 @@ fn clean_vstd(target_verus_dir: &std::path::PathBuf) -> Result<(), String> {
     Ok(())
 }
 
-const EXPECTED_FEATURES: &[&str] = &["singular", "axiom-usage-info", "record-history", "lean", "lean-export"];
+const EXPECTED_FEATURES: &[&str] = &["singular", "axiom-usage-info", "record-history", "lean"];
 
 fn check_expected_features(feature_args: &Vec<String>) -> Result<(), String> {
     let feature_args: Vec<_> = feature_args
@@ -1004,7 +1004,7 @@ fn run() -> Result<(), String> {
             let dashdash_pos = new_args.iter().position(|x| x == "--").expect("-- in args");
             let feature_args = filter_features(
                 &feature_args,
-                ["singular", "axiom-usage-info", "lean-export", "lean"].into_iter().collect(),
+                ["singular", "axiom-usage-info", "lean"].into_iter().collect(),
             );
             new_args.splice(dashdash_pos..dashdash_pos, feature_args);
             if nextest {
@@ -1154,7 +1154,7 @@ fn run() -> Result<(), String> {
                 let extra_args = if p == &"rust_verify" {
                     let feature_args = filter_features(
                         &feature_args,
-                        ["singular", "axiom-usage-info", "lean-export", "lean"].into_iter().collect(),
+                        ["singular", "axiom-usage-info", "lean"].into_iter().collect(),
                     );
                     rust_verify_forward_args = cargo_forward_args
                         .iter()

@@ -1916,13 +1916,13 @@ fn stm_to_stmts(ctx: &Ctx, state: &mut State, stm: &Stm) -> Result<Vec<Stmt>, Vi
         }
         StmX::AssertLean(_expr) => {
             // If we *don't* have Lean compilations turned on, throw an error
-            #[cfg(not(any(feature = "lean", feature = "lean-export")))]
+            #[cfg(not(feature = "lean"))]
             { panic!("AssertLean should be removed by sst_elaborate") }
             
             // If we *do* have Lean compilations turned on, `Assume` it
             // This is okay to do because this function gets called after Lean serialization
             // (This `Assume` node gets interpreted as an axiom in the SMT formula)
-            #[cfg(any(feature = "lean", feature = "lean-export"))]
+            #[cfg(feature = "lean")]
             { vec![Arc::new(StmtX::Assume(exp_to_expr(ctx, &_expr, expr_ctxt)?))] }
         }
         StmX::Return { base_error, ret_exp, inside_body, assert_id } => {
@@ -2981,7 +2981,7 @@ pub(crate) fn body_stm_to_air(
         }
     } else if is_lean {
         // If we don't have Lean compilation options turned on, throw an error
-        #[cfg(not(any(feature = "lean", feature = "lean-export")))] {
+        #[cfg(not(feature = "lean"))] {
             let err = error_with_label(
                 &func_span,
                 "assertion failed",
