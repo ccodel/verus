@@ -1988,7 +1988,7 @@ impl Verifier {
 
         // Export crate code to a JSON serialization for Lean
         // This function only produces a serialization if the file contains a `by (lean)`
-        #[cfg(any(feature = "lean", feature = "lean-export"))]
+        #[cfg(feature = "lean")]
         serialize_crate_for_lean(&ctx, &krate_sst);
 
         global_ctx = ctx.free();
