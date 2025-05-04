@@ -130,6 +130,18 @@
               },
               {
                 "proc_macro2": "Ident"
+              },
+              {
+                "option": {
+                  "tuple": [
+                    {
+                      "token": "As"
+                    },
+                    {
+                      "proc_macro2": "Ident"
+                    }
+                  ]
+                }
               }
             ]
           }
@@ -6129,6 +6141,11 @@
           "option": {
             "syn": "SignatureUnwind"
           }
+        },
+        "with": {
+          "option": {
+            "syn": "WithSpecOnFn"
+          }
         }
       }
     },
@@ -7382,6 +7399,85 @@
         ]
       },
       "exhaustive": false
+    },
+    {
+      "ident": "WithSpecOnExpr",
+      "features": {
+        "any": []
+      },
+      "fields": {
+        "with": {
+          "token": "With"
+        },
+        "inputs": {
+          "punctuated": {
+            "element": {
+              "syn": "Expr"
+            },
+            "punct": "Comma"
+          }
+        },
+        "outputs": {
+          "option": {
+            "tuple": [
+              {
+                "token": "FatArrow"
+              },
+              {
+                "syn": "Pat"
+              }
+            ]
+          }
+        },
+        "follows": {
+          "option": {
+            "tuple": [
+              {
+                "token": "OrEq"
+              },
+              {
+                "syn": "Pat"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "ident": "WithSpecOnFn",
+      "features": {
+        "any": []
+      },
+      "fields": {
+        "with": {
+          "token": "With"
+        },
+        "inputs": {
+          "punctuated": {
+            "element": {
+              "syn": "FnArg"
+            },
+            "punct": "Comma"
+          }
+        },
+        "outputs": {
+          "option": {
+            "tuple": [
+              {
+                "token": "RArrow"
+              },
+              {
+                "punctuated": {
+                  "element": {
+                    "syn": "PatType"
+                  },
+                  "punct": "Comma"
+                }
+              }
+            ]
+          }
+        }
+      }
     }
   ],
   "tokens": {
@@ -7540,6 +7636,7 @@
     "When": "when",
     "Where": "where",
     "While": "while",
+    "With": "with",
     "Yield": "yield"
   }
 }

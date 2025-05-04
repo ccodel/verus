@@ -3043,6 +3043,7 @@ impl Hash for crate::SignatureSpec {
         self.decreases.hash(state);
         self.invariants.hash(state);
         self.unwind.hash(state);
+        self.with.hash(state);
     }
 }
 #[cfg_attr(docsrs, doc(cfg(feature = "extra-traits")))]
@@ -3741,5 +3742,26 @@ impl Hash for crate::WherePredicate {
                 v0.hash(state);
             }
         }
+    }
+}
+#[cfg_attr(docsrs, doc(cfg(feature = "extra-traits")))]
+impl Hash for crate::WithSpecOnExpr {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        self.inputs.hash(state);
+        self.outputs.hash(state);
+        self.follows.hash(state);
+    }
+}
+#[cfg_attr(docsrs, doc(cfg(feature = "extra-traits")))]
+impl Hash for crate::WithSpecOnFn {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: Hasher,
+    {
+        self.inputs.hash(state);
+        self.outputs.hash(state);
     }
 }

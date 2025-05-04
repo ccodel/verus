@@ -1128,6 +1128,12 @@ pub trait Visit<'ast> {
     fn visit_where_predicate(&mut self, i: &'ast crate::WherePredicate) {
         visit_where_predicate(self, i);
     }
+    fn visit_with_spec_on_expr(&mut self, i: &'ast crate::WithSpecOnExpr) {
+        visit_with_spec_on_expr(self, i);
+    }
+    fn visit_with_spec_on_fn(&mut self, i: &'ast crate::WithSpecOnFn) {
+        visit_with_spec_on_fn(self, i);
+    }
 }
 #[cfg(any(feature = "derive", feature = "full"))]
 #[cfg_attr(docsrs, doc(cfg(any(feature = "derive", feature = "full"))))]
@@ -1189,6 +1195,10 @@ where
     if let Some(it) = &node.prover {
         skip!((it).0);
         v.visit_ident(&(it).1);
+        if let Some(it) = &(it).2 {
+            skip!((it).0);
+            v.visit_ident(&(it).1);
+        }
     }
     if let Some(it) = &node.requires {
         v.visit_requires(it);
@@ -4363,6 +4373,9 @@ where
     if let Some(it) = &node.unwind {
         v.visit_signature_unwind(it);
     }
+    if let Some(it) = &node.with {
+        v.visit_with_spec_on_fn(it);
+    }
 }
 pub fn visit_signature_spec_attr<'ast, V>(
     v: &mut V,
@@ -5041,6 +5054,41 @@ where
         }
         crate::WherePredicate::Type(_binding_0) => {
             v.visit_predicate_type(_binding_0);
+        }
+    }
+}
+pub fn visit_with_spec_on_expr<'ast, V>(v: &mut V, node: &'ast crate::WithSpecOnExpr)
+where
+    V: Visit<'ast> + ?Sized,
+{
+    skip!(node.with);
+    for el in Punctuated::pairs(&node.inputs) {
+        let it = el.value();
+        v.visit_expr(it);
+    }
+    if let Some(it) = &node.outputs {
+        skip!((it).0);
+        full!(v.visit_pat(& (it).1));
+    }
+    if let Some(it) = &node.follows {
+        skip!((it).0);
+        full!(v.visit_pat(& (it).1));
+    }
+}
+pub fn visit_with_spec_on_fn<'ast, V>(v: &mut V, node: &'ast crate::WithSpecOnFn)
+where
+    V: Visit<'ast> + ?Sized,
+{
+    skip!(node.with);
+    for el in Punctuated::pairs(&node.inputs) {
+        let it = el.value();
+        full!(v.visit_fn_arg(it));
+    }
+    if let Some(it) = &node.outputs {
+        skip!((it).0);
+        for el in Punctuated::pairs(&(it).1) {
+            let it = el.value();
+            full!(v.visit_pat_type(it));
         }
     }
 }

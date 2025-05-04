@@ -1249,6 +1249,15 @@ pub trait Fold {
     ) -> crate::WherePredicate {
         fold_where_predicate(self, i)
     }
+    fn fold_with_spec_on_expr(
+        &mut self,
+        i: crate::WithSpecOnExpr,
+    ) -> crate::WithSpecOnExpr {
+        fold_with_spec_on_expr(self, i)
+    }
+    fn fold_with_spec_on_fn(&mut self, i: crate::WithSpecOnFn) -> crate::WithSpecOnFn {
+        fold_with_spec_on_fn(self, i)
+    }
 }
 #[cfg(any(feature = "derive", feature = "full"))]
 #[cfg_attr(docsrs, doc(cfg(any(feature = "derive", feature = "full"))))]
@@ -1302,7 +1311,12 @@ where
         paren_token: node.paren_token,
         expr: Box::new(f.fold_expr(*node.expr)),
         by_token: node.by_token,
-        prover: (node.prover).map(|it| ((it).0, f.fold_ident((it).1))),
+        prover: (node.prover)
+            .map(|it| (
+                (it).0,
+                f.fold_ident((it).1),
+                ((it).2).map(|it| ((it).0, f.fold_ident((it).1))),
+            )),
         requires: (node.requires).map(|it| f.fold_requires(it)),
         body: (node.body).map(|it| Box::new(full!(f.fold_block(* it)))),
     }
@@ -4270,6 +4284,7 @@ where
         decreases: (node.decreases).map(|it| f.fold_signature_decreases(it)),
         invariants: (node.invariants).map(|it| f.fold_signature_invariants(it)),
         unwind: (node.unwind).map(|it| f.fold_signature_unwind(it)),
+        with: (node.with).map(|it| f.fold_with_spec_on_fn(it)),
     }
 }
 pub fn fold_signature_spec_attr<F>(
@@ -4951,6 +4966,34 @@ where
         crate::WherePredicate::Type(_binding_0) => {
             crate::WherePredicate::Type(f.fold_predicate_type(_binding_0))
         }
+    }
+}
+pub fn fold_with_spec_on_expr<F>(
+    f: &mut F,
+    node: crate::WithSpecOnExpr,
+) -> crate::WithSpecOnExpr
+where
+    F: Fold + ?Sized,
+{
+    crate::WithSpecOnExpr {
+        with: node.with,
+        inputs: crate::punctuated::fold(node.inputs, f, F::fold_expr),
+        outputs: (node.outputs).map(|it| ((it).0, full!(f.fold_pat((it).1)))),
+        follows: (node.follows).map(|it| ((it).0, full!(f.fold_pat((it).1)))),
+    }
+}
+pub fn fold_with_spec_on_fn<F>(
+    f: &mut F,
+    node: crate::WithSpecOnFn,
+) -> crate::WithSpecOnFn
+where
+    F: Fold + ?Sized,
+{
+    crate::WithSpecOnFn {
+        with: node.with,
+        inputs: crate::punctuated::fold(node.inputs, f, F::fold_fn_arg),
+        outputs: (node.outputs)
+            .map(|it| ((it).0, crate::punctuated::fold((it).1, f, F::fold_pat_type))),
     }
 }
 #[cfg(any(feature = "derive", feature = "full"))]

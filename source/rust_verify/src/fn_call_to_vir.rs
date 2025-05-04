@@ -31,7 +31,7 @@ use std::sync::Arc;
 use vir::ast::{
     ArithOp, AssertQueryMode, AutospecUsage, BinaryOp, BitwiseOp, BuiltinSpecFun, CallTarget,
     ChainedOp, ComputeMode, Constant, ExprX, FieldOpr, FunX, HeaderExpr, HeaderExprX, InequalityOp,
-    IntRange, IntegerTypeBoundKind, Mode, ModeCoercion, MultiOp, Quant, Typ, TypX, UnaryOp,
+    IntRange, IntegerTypeBoundKind, LeanMode, Mode, ModeCoercion, MultiOp, Quant, Typ, TypX, UnaryOp,
     UnaryOpr, VarAt, VarBinder, VarBinderX, VarIdent, VariantCheck, VirErr,
 };
 use vir::ast_util::{
@@ -985,34 +985,48 @@ fn verus_item_to_vir<'tcx, 'a>(
                         mode: AssertQueryMode::BitVector,
                     })
                 }
-                AssertItem::AssertLean => {
-                    unsupported_err_unless!(
-                        args_len == 1,
-                        expr.span,
-                        "expected assert_lean",
-                        &args
-                    );
+                AssertItem::AssertLean | AssertItem::AssertLeanProof => {
+                    if *assert_item == AssertItem::AssertLean {
+                        unsupported_err_unless!(
+                            args_len == 2,
+                            expr.span,
+                            "expected assert(...) by (lean) [requires ...] ;",
+                            &args
+                        );
+                    } else {
+                        unsupported_err_unless!(
+                            args_len == 3,
+                            expr.span,
+                            "expected assert(...) by (lean_proof as <thm>) [requires ...] ;",
+                            &args
+                        );
+                    }
+
+                    // First argument is the assertion's body
+                    // Second argument is any requires statements (can be an empty block)
+                    // Use `expr_to_vir` and `vir::headers::read_header` to extract the requires
+                    // Third argument (for `lean_proof` only) is theorem name
 
                     let exp = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
-                    mk_expr(ExprX::AssertLean(exp))
+                    let mut header_vir_expr = expr_to_vir(bctx, &args[1], ExprModifier::REGULAR)?;
+                    let header = vir::headers::read_header(&mut header_vir_expr)?;
+                    let requires = header.require;
+                    let mode =
+                        if *assert_item == AssertItem::AssertLean {
+                            LeanMode::Repl
+                        } else {
+                            // Should be a string literal
+                            // CC TODO This is extremely hacky, assumes the ident is between the only two double quotes
+                            let s = format!("{:?}", args[2]);
+                            let s = s.split("\"").nth(1).unwrap();
+                            LeanMode::Proof(Arc::new(s.to_string()))
+                        };
 
-                    /*
-                    // Include any `requires` as premises for the body
-                    // TODO: Error check for the rest of the header being empty
-                    let mut vir_expr = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
-                    let header = vir::headers::read_header(&mut vir_expr)?;
-                    unsupported_err_unless!(
-                        header.ensure.len() == 0,
-                        expr.span,
-                        "assert_lean cannot have ensures",
-                        &args
-                    );
-
-                    // Process the requires statements in reverse order
-                    // (currying them with right-associative arrows)
-                    for req in header.require.iter().rev() {
-                        exp = mk_expr(ExprX::Binary(BinaryOp::Implies, req.clone(), exp))?;
-                    } */
+                    mk_expr(ExprX::AssertLean {
+                        requires,
+                        body: exp.clone(),
+                        mode,
+                    })
                 }
             }
         }

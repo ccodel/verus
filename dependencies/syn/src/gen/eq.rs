@@ -2384,6 +2384,7 @@ impl PartialEq for crate::SignatureSpec {
             && self.recommends == other.recommends && self.ensures == other.ensures
             && self.returns == other.returns && self.decreases == other.decreases
             && self.invariants == other.invariants && self.unwind == other.unwind
+            && self.with == other.with
     }
 }
 #[cfg_attr(docsrs, doc(cfg(feature = "extra-traits")))]
@@ -2974,5 +2975,22 @@ impl PartialEq for crate::WherePredicate {
             }
             _ => false,
         }
+    }
+}
+#[cfg_attr(docsrs, doc(cfg(feature = "extra-traits")))]
+impl Eq for crate::WithSpecOnExpr {}
+#[cfg_attr(docsrs, doc(cfg(feature = "extra-traits")))]
+impl PartialEq for crate::WithSpecOnExpr {
+    fn eq(&self, other: &Self) -> bool {
+        self.inputs == other.inputs && self.outputs == other.outputs
+            && self.follows == other.follows
+    }
+}
+#[cfg_attr(docsrs, doc(cfg(feature = "extra-traits")))]
+impl Eq for crate::WithSpecOnFn {}
+#[cfg_attr(docsrs, doc(cfg(feature = "extra-traits")))]
+impl PartialEq for crate::WithSpecOnFn {
+    fn eq(&self, other: &Self) -> bool {
+        self.inputs == other.inputs && self.outputs == other.outputs
     }
 }

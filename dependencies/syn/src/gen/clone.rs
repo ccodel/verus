@@ -2420,18 +2420,6 @@ impl Clone for crate::SignatureInvariants {
         }
     }
 }
-
-#[cfg_attr(docsrs, doc(cfg(feature = "clone-impls")))]
-impl Clone for crate::WithSpecOnFn {
-    fn clone(&self) -> Self {
-        crate::WithSpecOnFn {
-            with: self.with.clone(),
-            inputs: self.inputs.clone(),
-            outputs: self.outputs.clone(),
-        }
-    }
-}
-
 #[cfg_attr(docsrs, doc(cfg(feature = "clone-impls")))]
 impl Clone for crate::SignatureSpec {
     fn clone(&self) -> Self {
@@ -2978,6 +2966,27 @@ impl Clone for crate::WherePredicate {
                 crate::WherePredicate::Lifetime(v0.clone())
             }
             crate::WherePredicate::Type(v0) => crate::WherePredicate::Type(v0.clone()),
+        }
+    }
+}
+#[cfg_attr(docsrs, doc(cfg(feature = "clone-impls")))]
+impl Clone for crate::WithSpecOnExpr {
+    fn clone(&self) -> Self {
+        crate::WithSpecOnExpr {
+            with: self.with.clone(),
+            inputs: self.inputs.clone(),
+            outputs: self.outputs.clone(),
+            follows: self.follows.clone(),
+        }
+    }
+}
+#[cfg_attr(docsrs, doc(cfg(feature = "clone-impls")))]
+impl Clone for crate::WithSpecOnFn {
+    fn clone(&self) -> Self {
+        crate::WithSpecOnFn {
+            with: self.with.clone(),
+            inputs: self.inputs.clone(),
+            outputs: self.outputs.clone(),
         }
     }
 }

@@ -146,9 +146,9 @@ fn elaborate_one_stm<D: Diagnostics + ?Sized>(
         // This is because the serialization code needs to see the `AssertLean` node
         // in verifier.rs after the call to this function
         #[cfg(not(feature = "lean"))]
-        StmX::AssertLean(exp) => {
+        StmX::AssertLean { body, .. } => {
             let err = error_with_label(
-                &exp.span.clone(),
+                &body.span.clone(),
                 "assertion failed",
                 "To enable \"by (lean)\", compile Verus with \"--features lean\"");
             Err(err)

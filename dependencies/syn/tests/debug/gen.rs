@@ -79,11 +79,44 @@ impl Debug for Lite<syn::Assert> {
         if let Some(val) = &self.value.prover {
             #[derive(RefCast)]
             #[repr(transparent)]
-            struct Print((syn::token::Paren, proc_macro2::Ident));
+            struct Print(
+                (
+                    syn::token::Paren,
+                    proc_macro2::Ident,
+                    Option<(syn::token::As, proc_macro2::Ident)>,
+                ),
+            );
             impl Debug for Print {
                 fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                     formatter.write_str("Some(")?;
-                    Debug::fmt(Lite(&self.0.1), formatter)?;
+                    Debug::fmt(
+                        &(
+                            Lite(&self.0.1),
+                            {
+                                #[derive(RefCast)]
+                                #[repr(transparent)]
+                                struct Print(Option<(syn::token::As, proc_macro2::Ident)>);
+                                impl Debug for Print {
+                                    fn fmt(
+                                        &self,
+                                        formatter: &mut fmt::Formatter,
+                                    ) -> fmt::Result {
+                                        match &self.0 {
+                                            Some(_val) => {
+                                                formatter.write_str("Some(")?;
+                                                Debug::fmt(Lite(&_val.1), formatter)?;
+                                                formatter.write_str(")")?;
+                                                Ok(())
+                                            }
+                                            None => formatter.write_str("None"),
+                                        }
+                                    }
+                                }
+                                Print::ref_cast(&self.0.2)
+                            },
+                        ),
+                        formatter,
+                    )?;
                     formatter.write_str(")")?;
                     Ok(())
                 }
@@ -5651,6 +5684,20 @@ impl Debug for Lite<syn::SignatureSpec> {
             }
             formatter.field("unwind", Print::ref_cast(val));
         }
+        if let Some(val) = &self.value.with {
+            #[derive(RefCast)]
+            #[repr(transparent)]
+            struct Print(syn::WithSpecOnFn);
+            impl Debug for Print {
+                fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                    formatter.write_str("Some(")?;
+                    Debug::fmt(Lite(&self.0), formatter)?;
+                    formatter.write_str(")")?;
+                    Ok(())
+                }
+            }
+            formatter.field("with", Print::ref_cast(val));
+        }
         formatter.finish()
     }
 }
@@ -6743,6 +6790,68 @@ impl Debug for Lite<syn::WherePredicate> {
         }
     }
 }
+impl Debug for Lite<syn::WithSpecOnExpr> {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        let mut formatter = formatter.debug_struct("WithSpecOnExpr");
+        if !self.value.inputs.is_empty() {
+            formatter.field("inputs", Lite(&self.value.inputs));
+        }
+        if let Some(val) = &self.value.outputs {
+            #[derive(RefCast)]
+            #[repr(transparent)]
+            struct Print((syn::token::FatArrow, syn::Pat));
+            impl Debug for Print {
+                fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                    formatter.write_str("Some(")?;
+                    Debug::fmt(Lite(&self.0.1), formatter)?;
+                    formatter.write_str(")")?;
+                    Ok(())
+                }
+            }
+            formatter.field("outputs", Print::ref_cast(val));
+        }
+        if let Some(val) = &self.value.follows {
+            #[derive(RefCast)]
+            #[repr(transparent)]
+            struct Print((syn::token::OrEq, syn::Pat));
+            impl Debug for Print {
+                fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                    formatter.write_str("Some(")?;
+                    Debug::fmt(Lite(&self.0.1), formatter)?;
+                    formatter.write_str(")")?;
+                    Ok(())
+                }
+            }
+            formatter.field("follows", Print::ref_cast(val));
+        }
+        formatter.finish()
+    }
+}
+impl Debug for Lite<syn::WithSpecOnFn> {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        let mut formatter = formatter.debug_struct("WithSpecOnFn");
+        if !self.value.inputs.is_empty() {
+            formatter.field("inputs", Lite(&self.value.inputs));
+        }
+        if let Some(val) = &self.value.outputs {
+            #[derive(RefCast)]
+            #[repr(transparent)]
+            struct Print(
+                (syn::token::RArrow, syn::punctuated::Punctuated<syn::PatType, Comma>),
+            );
+            impl Debug for Print {
+                fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                    formatter.write_str("Some(")?;
+                    Debug::fmt(Lite(&self.0.1), formatter)?;
+                    formatter.write_str(")")?;
+                    Ok(())
+                }
+            }
+            formatter.field("outputs", Print::ref_cast(val));
+        }
+        formatter.finish()
+    }
+}
 impl Debug for Lite<syn::token::Abstract> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("Token![abstract]")
@@ -7516,6 +7625,11 @@ impl Debug for Lite<syn::token::Where> {
 impl Debug for Lite<syn::token::While> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         formatter.write_str("Token![while]")
+    }
+}
+impl Debug for Lite<syn::token::With> {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("Token![with]")
     }
 }
 impl Debug for Lite<syn::token::Yield> {

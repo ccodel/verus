@@ -293,7 +293,7 @@ ast_struct! {
         pub expr: Box<Expr>,
         /// by_token is only used if prover and/or body is Some
         pub by_token: Option<Token![by]>,
-        pub prover: Option<(token::Paren, Ident)>,
+        pub prover: Option<(token::Paren, Ident, Option<(Token![as], Ident)>)>,
         pub requires: Option<Requires>,
         pub body: Option<Box<Block>>,
     }
@@ -1115,7 +1115,17 @@ pub mod parsing {
                     let content;
                     let paren_token = parenthesized!(content in input);
                     let id = content.parse()?;
-                    Some((paren_token, id))
+                    // Parse a Lean theorem name, only used in `by (lean_proof)`
+                    let theorem_name =
+                        // Only parse a therem name if an `as <name>` is provided
+                        if content.peek(Token![as]) {
+                            let as_token = content.parse()?;
+                            let theorem_name = content.parse()?;
+                            Some((as_token, theorem_name))
+                        } else {
+                            None
+                        };
+                    Some((paren_token, id, theorem_name))
                 } else {
                     None
                 };
@@ -1721,9 +1731,13 @@ mod printing {
             if let Some(by_token) = &self.by_token {
                 if self.prover.is_some() || self.body.is_some() {
                     by_token.to_tokens(tokens);
-                    if let Some((paren, id)) = &self.prover {
+                    if let Some((paren, id, theorem)) = &self.prover {
                         paren.surround(tokens, |tokens| {
                             id.to_tokens(tokens);
+                            if let Some((as_token, theorem)) = theorem {
+                                as_token.to_tokens(tokens);
+                                theorem.to_tokens(tokens);
+                            }
                         });
                     }
                     self.requires.to_tokens(tokens);

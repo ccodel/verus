@@ -3415,6 +3415,7 @@ impl Debug for crate::SignatureSpec {
         formatter.field("decreases", &self.decreases);
         formatter.field("invariants", &self.invariants);
         formatter.field("unwind", &self.unwind);
+        formatter.field("with", &self.with);
         formatter.finish()
     }
 }
@@ -4176,5 +4177,26 @@ impl Debug for crate::WherePredicate {
                 formatter.finish()
             }
         }
+    }
+}
+#[cfg_attr(docsrs, doc(cfg(feature = "extra-traits")))]
+impl Debug for crate::WithSpecOnExpr {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        let mut formatter = formatter.debug_struct("WithSpecOnExpr");
+        formatter.field("with", &self.with);
+        formatter.field("inputs", &self.inputs);
+        formatter.field("outputs", &self.outputs);
+        formatter.field("follows", &self.follows);
+        formatter.finish()
+    }
+}
+#[cfg_attr(docsrs, doc(cfg(feature = "extra-traits")))]
+impl Debug for crate::WithSpecOnFn {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        let mut formatter = formatter.debug_struct("WithSpecOnFn");
+        formatter.field("with", &self.with);
+        formatter.field("inputs", &self.inputs);
+        formatter.field("outputs", &self.outputs);
+        formatter.finish()
     }
 }

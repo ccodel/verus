@@ -799,14 +799,9 @@ fn visit_stm(ctx: &Ctx, state: &mut State, stm: &Stm) -> Stm {
             })
         }
         StmX::AssertCompute(..) => panic!("AssertCompute should be removed by sst_elaborate"),
-        StmX::AssertLean(_e1) => {
-            // If we *don't* have Lean compilations turned on, throw an error
-            #[cfg(not(feature = "lean"))]
-            { panic!("AssertLean cannot be processed without the `lean` feature") }
-            
-            // If we *do* have Lean compilations turned on, process the expression
-            #[cfg(feature = "lean")]
-            { mk_stm(StmX::AssertLean(visit_exp_native(ctx, state, _e1))) }
+        StmX::AssertLean { body, mode } => {
+            let body = visit_exp_native(ctx, state, body);
+            mk_stm(StmX::AssertLean { body, mode: mode.clone() })
         }
         StmX::Assume(e1) => {
             let e1 = visit_exp_native(ctx, state, e1);

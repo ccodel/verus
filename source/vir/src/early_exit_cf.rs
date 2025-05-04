@@ -80,7 +80,7 @@ fn expr_get_early_exits_rec(
             | ExprX::Choose { .. }
             | ExprX::WithTriggers { .. }
             | ExprX::AssertCompute(..)
-            | ExprX::AssertLean(..)
+            | ExprX::AssertLean { .. }
             | ExprX::Fuel(..)
             | ExprX::Header(..)
             | ExprX::AssertAssume { .. }
