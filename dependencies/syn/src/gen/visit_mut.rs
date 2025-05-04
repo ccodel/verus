@@ -1223,6 +1223,10 @@ where
     if let Some(it) = &mut node.prover {
         skip!((it).0);
         v.visit_ident_mut(&mut (it).1);
+        if let Some(it) = &mut (it).2 {
+            skip!((it).0);
+            v.visit_ident_mut(&mut (it).1);
+        }
     }
     if let Some(it) = &mut node.requires {
         v.visit_requires_mut(it);

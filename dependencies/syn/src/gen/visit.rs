@@ -1213,6 +1213,10 @@ where
     if let Some(it) = &node.prover {
         skip!((it).0);
         v.visit_ident(&(it).1);
+        if let Some(it) = &(it).2 {
+            skip!((it).0);
+            v.visit_ident(&(it).1);
+        }
     }
     if let Some(it) = &node.requires {
         v.visit_requires(it);

@@ -2616,6 +2616,20 @@ impl Visitor {
 
         if let Some(prover) = &assert.prover {
             let prover_id = prover.1.to_string();
+            let as_theorem = &prover.2;
+
+            // Store an error if any prover other than "lean_proof" supplies an `as <name>`
+            // Store an error if "lean_proof" is used and there is no theorem name
+            if prover_id != "lean_proof" && as_theorem.is_some() {
+                *expr = quote_verbatim!(span, attrs => compile_error!("`as <thm>` in 'by (<prover> as <thm>)' can only used with the 'lean_proof' prover"));
+                self.auto_proof_block(expr, span);
+                return true;
+            } else if prover_id == "lean_proof" && as_theorem.is_none() {
+                *expr = quote_verbatim!(span, attrs => compile_error!("missing theorem name when using the `lean_proof` prover. Usage: 'by (lean_proof as <thm>)'"));
+                self.auto_proof_block(expr, span);
+                return true;
+            }
+
             match prover_id.as_str() {
                 "compute" => {
                     if assert.body.is_some() {
@@ -2671,52 +2685,41 @@ impl Visitor {
                     };
                     *expr = Expr::Verbatim(quote_spanned!(span => {#assert_x_by}));
                 }
-                "lean" => {
+                "lean" | "lean_proof" => {
                     if assert.body.is_some() {
-                        *expr = quote_verbatim!(span, attrs => compile_error!("the 'lean' prover does not support a body"));
+                        *expr = quote_verbatim!(span, attrs => compile_error!("the 'lean' and 'lean_proof' provers do not support a body"));
                     } else {
-                        *expr = Expr::Verbatim(
-                            quote_spanned_builtin!(builtin, span => #builtin::assert_lean(#arg)),
-                        );
+                        // Place the (potentially empty) set of requires statements into a single block
+                        let requires_stmts: Vec<Stmt> = 
+                            if let Some(Requires { token, exprs }) = &assert.requires {
+                                vec![
+                                    Stmt::Expr(
+                                        Expr::Verbatim(
+                                            quote_spanned_builtin!(builtin, token.span => #builtin::requires([#exprs])),
+                                        ),
+                                        Some(Semi { spans: [token.span] })
+                                    ),
+                                ]
+                            } else {
+                                vec![]
+                            };
 
-                        // let mut stmts: Vec<Stmt> = Vec::new();
-                        /* if let Some(Requires { token, exprs }) = &assert.requires {
-                            let requires = Expr::Verbatim(
-                                quote_spanned_builtin!(builtin, token.span => #builtin::requires([#exprs])),
-                            );
-                            *expr = Expr::Verbatim(
-                                quote_spanned_builtin!(builtin, token.span => #builtin::assert_lean(#requires, #arg)),
-                            );
+                        let block = Block {
+                            brace_token: token::Brace { span: into_spans(span) },
+                            stmts: requires_stmts,
+                        };
+
+                        if prover_id == "lean" {
+                            *expr = quote_verbatim!(builtin, span, attrs => #builtin::assert_lean(#arg, #block));
                         } else {
-                            *expr = Expr::Verbatim(
-                                quote_spanned_builtin!(builtin, span => #builtin::assert_lean(#arg)),
-                            );
-                        } */
-
-                        /* if let Some(Requires { token, exprs }) = &assert.requires {
-                            let requires = Expr::Verbatim(
-                                quote_spanned_builtin!(builtin, token.span => #builtin::requires([#exprs])),
-                            );
-                            stmts.push(Stmt::Expr(
-                                requires,
-                                Some(Semi { spans: [token.span] }),
-                            ));
+                            let (_, theorem_name) = as_theorem.clone().unwrap();
+                            let theorem_name = theorem_name.to_string();
+                            *expr = quote_verbatim!(builtin, span, attrs => #builtin::assert_lean_proof(#arg, #block, #theorem_name));
                         }
-
-                        stmts.push(Stmt::Expr(
-                            Expr::Verbatim(
-                                quote_spanned_builtin!(builtin, span => #builtin::ensures(#arg)),
-                            ),
-                            Some(Semi { spans: [span] }),
-                        ));
-                        
-                        *expr = Expr::Verbatim(
-                            quote_spanned_builtin!(builtin, span => #builtin::assert_lean(#stmts))
-                        ); */
                     }
                 }
                 _ => {
-                    *expr = quote_verbatim!(span, attrs => compile_error!("unknown prover name for assert-by (supported provers: 'compute_only', 'compute', 'bit_vector', 'nonlinear_arith', and 'lean')"));
+                    *expr = quote_verbatim!(span, attrs => compile_error!("unknown prover name for assert-by (supported provers: 'compute_only', 'compute', 'bit_vector', 'nonlinear_arith', 'lean', and 'lean_proof')"));
                 }
             }
         } else if let Some(block) = &assert.body {

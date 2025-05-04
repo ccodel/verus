@@ -1914,16 +1914,15 @@ fn stm_to_stmts(ctx: &Ctx, state: &mut State, stm: &Stm) -> Result<Vec<Stmt>, Vi
         StmX::AssertCompute(..) => {
             panic!("AssertCompute should be removed by sst_elaborate")
         }
-        StmX::AssertLean(_expr) => {
-            // If we *don't* have Lean compilations turned on, throw an error
-            #[cfg(not(feature = "lean"))]
-            { panic!("AssertLean should be removed by sst_elaborate") }
-            
-            // If we *do* have Lean compilations turned on, `Assume` it
+        StmX::AssertLean { body: _body, mode: _ } => {
+            #[cfg(feature = "lean")]
+            // `Assume` the body of the Lean assert
             // This is okay to do because this function gets called after Lean serialization
             // (This `Assume` node gets interpreted as an axiom in the SMT formula)
-            #[cfg(feature = "lean")]
-            { vec![Arc::new(StmtX::Assume(exp_to_expr(ctx, &_expr, expr_ctxt)?))] }
+            { vec![Arc::new(StmtX::Assume(exp_to_expr(ctx, &_body, expr_ctxt)?))] }
+
+            #[cfg(not(feature = "lean"))]
+            { panic!("AssertLean should throw an error if not compiled with `--features lean`") }
         }
         StmX::Return { base_error, ret_exp, inside_body, assert_id } => {
             let skip = if ctx.checking_spec_preconditions() {

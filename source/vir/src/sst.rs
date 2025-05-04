@@ -167,7 +167,7 @@ pub enum StmX {
         body: Stm,
     },
     AssertCompute(Option<AssertId>, Exp, crate::ast::ComputeMode),
-    AssertLean(Exp),
+    AssertLean { body: Exp, mode: crate::ast::LeanMode },
     Assume(Exp),
     Assign {
         lhs: Dest,

@@ -130,6 +130,18 @@
               },
               {
                 "proc_macro2": "Ident"
+              },
+              {
+                "option": {
+                  "tuple": [
+                    {
+                      "token": "As"
+                    },
+                    {
+                      "proc_macro2": "Ident"
+                    }
+                  ]
+                }
               }
             ]
           }

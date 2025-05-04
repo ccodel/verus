@@ -1347,12 +1347,21 @@ fn check_expr_handle_mut_arg(
             check_expr_has_mode(ctxt, record, typing, Mode::Proof, proof, Mode::Proof)?;
             Ok(Mode::Proof)
         }
-        ExprX::AssertCompute(e, _) 
-        | ExprX::AssertLean(e) => {
+        ExprX::AssertCompute(e, _) => {
             if ctxt.check_ghost_blocks && typing.block_ghostness == Ghost::Exec {
                 return Err(error(&expr.span, "cannot use assert in exec mode"));
             }
             check_expr_has_mode(ctxt, record, typing, Mode::Spec, e, Mode::Spec)?;
+            Ok(Mode::Proof)
+        }
+        ExprX::AssertLean { requires, body, mode: _ } => {
+            if ctxt.check_ghost_blocks && typing.block_ghostness == Ghost::Exec {
+                return Err(error(&expr.span, "cannot use assert in exec mode"));
+            }
+            for req in requires.iter() {
+                check_expr_has_mode(ctxt, record, typing, Mode::Spec, req, Mode::Spec)?;
+            }
+            check_expr_has_mode(ctxt, record, typing, Mode::Spec, body, Mode::Spec)?;
             Ok(Mode::Proof)
         }
         ExprX::If(e1, e2, e3) => {

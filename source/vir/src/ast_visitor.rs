@@ -498,9 +498,14 @@ pub(crate) trait AstVisitor<R: Returner, Err, Scope: Scoper> {
                 let expr = self.visit_expr(expr)?;
                 R::ret(|| expr_new(ExprX::AssertCompute(R::get(expr), *compute_mode)))
             }
-            ExprX::AssertLean(expr) => {
-                let expr = self.visit_expr(expr)?;
-                R::ret(|| expr_new(ExprX::AssertLean(R::get(expr))))
+            ExprX::AssertLean { requires, body, mode } => {
+                let requires = self.visit_exprs(requires)?;
+                let body = self.visit_expr(body)?;
+                R::ret(|| expr_new(ExprX::AssertLean {
+                    requires: R::get_vec_a(requires),
+                    body: R::get(body),
+                    mode: mode.clone(),
+                }))
             }
             ExprX::If(cond, thn, els) => {
                 let cond = self.visit_expr(cond)?;

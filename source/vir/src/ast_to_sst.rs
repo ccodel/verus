@@ -1997,16 +1997,88 @@ pub(crate) fn expr_to_stm_opt(
             stms.push(assume);
             Ok((stms, ret))
         }
-        ExprX::AssertLean(e) => {
-            // Follows the AssertCompute branch
-            state.disable_recommends += 1;
-            let (mut stms, checked_exp) = expr_to_pure_exp_check(ctx, state, &e)?;
-            state.disable_recommends -= 1;
-            let ret = ReturnValue::ImplicitUnit(checked_exp.span.clone());
+        // ExprX::AssertLean { requires, ensures, body, mode } => {
+        ExprX::AssertLean { requires, body, mode } => {
 
-            let assume = Spanned::new(checked_exp.span.clone(), StmX::AssertLean(checked_exp));
-            stms.push(assume);
-            Ok((stms, ret))
+            let mut stms: Vec<Stm> = Vec::new();
+            let mut reqs: Vec<Exp> = Vec::new();
+            // let mut enss: Vec<Exp> = Vec::new();
+
+            // TODO/Q: Should we always disable recommends here?
+            state.disable_recommends += 1;
+
+            // 1. Accumulate spec preconditions and the requires/ensures statements
+            for req in requires.iter() {
+                let (check_stms, require_exp) = expr_to_pure_exp_check(ctx, state, &req)?;
+                stms.extend(check_stms);
+                reqs.push(require_exp.clone());
+            }
+
+            // for ens in ensures.iter() {
+            //    let (check_stms, ensure_exp) = expr_to_pure_exp_check(ctx, state, &ens)?;
+            //     stms.extend(check_stms);
+            //     enss.push(ensure_exp.clone());
+            // }
+
+            // 2. Add an `Assert` for each requires
+            // This forces Verus to prove that each requires holds
+            for req in requires.iter() {
+                let require_exp = expr_to_pure_exp_skip_checks(ctx, state, &req)?;
+                let assert = Spanned::new(
+                    req.span.clone(),
+                    StmX::Assert(
+                        state.next_assert_id(),
+                        Some(error(
+                            &req.span.clone(),
+                            "requires not satisfied".to_string(),
+                        )),
+                        require_exp,
+                    ),
+                );
+                stms.push(assert);
+            }
+
+            // 3. Process the theorem body
+            let (body_stms, mut body_exp) = expr_to_pure_exp_check(ctx, state, body)?;
+            stms.extend(body_stms);
+
+            // 4. Add an `Assert` for each ensures
+            // This forces Verus to prove that each ensures holds
+            // Note that we add these to `stms` after the theorem body
+            // for ens in ensures.iter() {
+            //     let ensure_exp = expr_to_pure_exp_skip_checks(ctx, state, &ens)?;
+            //     let assert = Spanned::new(
+            //         ens.span.clone(),
+            //         StmX::Assert(state.next_assert_id(), None, ensure_exp),
+            //     );
+            //     stms.push(assert);
+            // }
+
+            state.disable_recommends -= 1;
+
+            // 6. Create implications from the requires
+            // Implications are right-associative, so we process them in reverse order
+            for req in reqs.iter().rev() {
+                body_exp = SpannedTyped::new(
+                    &req.span,
+                    &Arc::new(TypX::Bool),
+                        ExpX::Binary(
+                        BinaryOp::Implies,
+                        req.clone(),
+                        body_exp.clone()
+                    )
+                );
+            }
+
+            // 5. Create the `Stm` with both the statements and the theorem body
+            let block = Spanned::new(expr.span.clone(), StmX::Block(Arc::new(stms)));
+            let theorem_body = Spanned::new(body_exp.span.clone(), StmX::AssertLean {
+                body: body_exp,
+                mode: mode.clone(),
+            });
+
+            let ret = ReturnValue::ImplicitUnit(expr.span.clone());
+            Ok((vec![block, theorem_body], ret))
         }
         ExprX::If(expr0, expr1, None) => {
             let (stms0, e0) = expr_to_stm_opt(ctx, state, expr0)?;
