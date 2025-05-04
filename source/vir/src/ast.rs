@@ -962,6 +962,16 @@ pub enum AutospecUsage {
     Final,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash, ToDebugSNode)]
+pub enum LeanMode {
+    /// Discharge the VC to Lean via an online REPL mode.
+    Repl,
+    /// Export the proof to a Lean file, via JSON, with the given theorem name.
+    /// For spec functions, the `Ident` is the name of the function.
+    /// For `assert()`s, this is a user-provided name.
+    Proof(Ident),
+}
+
 /// Represents the expression after the '..' in a "ctor update"
 /// like the `foo` in `{ a: e1, b: e2, .. foo }`.
 #[derive(Clone, Debug, Serialize, Deserialize, ToDebugSNode)]
@@ -1082,7 +1092,7 @@ pub enum ExprX {
     AssertQuery { requires: Exprs, ensures: Exprs, proof: Expr, mode: AssertQueryMode },
     /// Assertion discharged via computation
     AssertCompute(Expr, ComputeMode),
-    AssertLean(Expr),
+    AssertLean { requires: Exprs, body: Expr, mode: LeanMode },
     /// If-else
     If(Expr, Expr, Option<Expr>),
     /// Match (Note: ast_simplify replaces Match with other expressions)

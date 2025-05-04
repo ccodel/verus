@@ -21,7 +21,7 @@ spec fn add(x: int, y: int) -> int {
   x + y
 }
 
-proof fn forall_with_specfn() {
+proof fn forall_with_specfn(i: int) {
   // standard commutativity
   assert(forall|x:int, y:int| add(x, y) == add(y, x)) by (lean);
   // shadowing

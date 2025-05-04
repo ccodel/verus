@@ -195,7 +195,7 @@ pub enum StmX {
     },
     /// Assertion checked by verification-time computation/interpretation
     AssertCompute(Option<AssertId>, Exp, crate::ast::ComputeMode),
-    AssertLean(Exp),
+    AssertLean { body: Exp, mode: crate::ast::LeanMode },
     /// Add assumption to verification context (trusted, not checked)
     Assume(Exp),
     /// Assignment to a mutable variable or location

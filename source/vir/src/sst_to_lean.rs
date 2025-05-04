@@ -1,6 +1,6 @@
 use crate::context::Ctx;
 use crate::ast::{
-    Typ, TypX, Typs, Datatype, DatatypeX, Dt, Fun, NullaryOpr, PathX, Mode, Variant, VarBinder, VarBinders,
+    Typ, TypX, Typs, Datatype, DatatypeX, Dt, Fun, LeanMode, NullaryOpr, PathX, Mode, Variant, VarBinder, VarBinders,
 };
 use crate::ast_util::types_equal;
 use crate::sst::{
@@ -386,10 +386,11 @@ fn lvisit_stm<'lctx>(lctx: &mut LeanCtx<'lctx>, stm: &'lctx Stm) {
         StmX::AssertCompute(_, exp, _) => {
             lvisit_exp(lctx, exp);
         }
-        StmX::AssertLean(exp) => {
+        // TODO: requires/ensures?
+        StmX::AssertLean { body, .. } => {
             start_by_lean(lctx);
-            add_by_lean_assertion(lctx, exp);
-            lvisit_exp(lctx, exp);
+            add_by_lean_assertion(lctx, body);
+            lvisit_exp(lctx, body);
             stop_by_lean(lctx);
         }
         StmX::Assume(exp) => {

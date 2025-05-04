@@ -247,7 +247,8 @@ pub(crate) enum AssertItem {
     AssertBitvectorBy,
     AssertForallBy,
     AssertBitVector,
-    AssertLean,
+    AssertLean,         // Online Lean REPL
+    AssertLeanProof,    // Offline Lean proof in a `.lean` file, via JSON
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy, Hash)]
@@ -536,6 +537,7 @@ fn verus_items_map() -> Vec<(&'static str, VerusItem)> {
         ("verus::verus_builtin::assert_forall_by",        VerusItem::Assert(AssertItem::AssertForallBy)),
         ("verus::verus_builtin::assert_bit_vector",       VerusItem::Assert(AssertItem::AssertBitVector)),
         ("verus::verus_builtin::assert_lean_by",          VerusItem::Assert(AssertItem::AssertLean)),
+        ("verus::verus_builtin::assert_lean_proof",        VerusItem::Assert(AssertItem::AssertLeanProof)),
         ("verus::verus_builtin::use_type_invariant",      VerusItem::UseTypeInvariant),
 
         ("verus::verus_builtin::with_triggers",           VerusItem::WithTriggers),

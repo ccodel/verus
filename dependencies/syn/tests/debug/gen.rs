@@ -79,11 +79,44 @@ impl Debug for Lite<syn::Assert> {
         if let Some(val) = &self.value.prover {
             #[derive(RefCast)]
             #[repr(transparent)]
-            struct Print((syn::token::Paren, proc_macro2::Ident));
+            struct Print(
+                (
+                    syn::token::Paren,
+                    proc_macro2::Ident,
+                    Option<(syn::token::As, proc_macro2::Ident)>,
+                ),
+            );
             impl Debug for Print {
                 fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                     formatter.write_str("Some(")?;
-                    Debug::fmt(Lite(&self.0.1), formatter)?;
+                    Debug::fmt(
+                        &(
+                            Lite(&self.0.1),
+                            {
+                                #[derive(RefCast)]
+                                #[repr(transparent)]
+                                struct Print(Option<(syn::token::As, proc_macro2::Ident)>);
+                                impl Debug for Print {
+                                    fn fmt(
+                                        &self,
+                                        formatter: &mut fmt::Formatter,
+                                    ) -> fmt::Result {
+                                        match &self.0 {
+                                            Some(_val) => {
+                                                formatter.write_str("Some(")?;
+                                                Debug::fmt(Lite(&_val.1), formatter)?;
+                                                formatter.write_str(")")?;
+                                                Ok(())
+                                            }
+                                            None => formatter.write_str("None"),
+                                        }
+                                    }
+                                }
+                                Print::ref_cast(&self.0.2)
+                            },
+                        ),
+                        formatter,
+                    )?;
                     formatter.write_str(")")?;
                     Ok(())
                 }
