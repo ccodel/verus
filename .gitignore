@@ -8,3 +8,4 @@
 .DS_Store
 source/*.json
 source/serialized_assert/*
+serialized_*.json
