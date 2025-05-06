@@ -651,7 +651,7 @@ pub struct ArmX {
     pub pattern: Pattern,
     /// "if" condition on a case
     pub guard: Expr,
-    /// expression or statement the executes when case matches
+    /// expression or statement that executes when the pattern match succeeds
     pub body: Expr,
 }
 

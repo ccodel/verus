@@ -591,6 +591,36 @@ pub fn chain_binary(span: &Span, op: BinaryOp, init: &Expr, exprs: &Vec<Expr>) -
 
     let mut expr = exprs[0].clone();
     for e in exprs.iter().skip(1) {
+        match op {
+            BinaryOp::And => {
+                match expr.x {
+                    ExprX::Const(Constant::Bool(true)) => { expr = e.clone(); continue; }
+                    ExprX::Const(Constant::Bool(false)) => { break; }
+                    _ => {}
+                }
+
+                match e.x {
+                    ExprX::Const(Constant::Bool(true)) => { continue; }
+                    ExprX::Const(Constant::Bool(false)) => { expr = e.clone(); break; }
+                    _ => {}
+                }
+            }
+            BinaryOp::Or => {
+                match expr.x {
+                    ExprX::Const(Constant::Bool(true)) => { break; }
+                    ExprX::Const(Constant::Bool(false)) => { expr = e.clone(); continue; }
+                    _ => {}
+                }
+
+                match e.x {
+                    ExprX::Const(Constant::Bool(true)) => { expr = e.clone(); break; }
+                    ExprX::Const(Constant::Bool(false)) => { continue; }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+
         expr = SpannedTyped::new(span, &init.typ, ExprX::Binary(op, expr, e.clone()));
     }
     expr
