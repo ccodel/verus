@@ -193,8 +193,7 @@ fn pattern_to_exprs_rec(
                 });
                 let field_exp = pattern_field_expr(&pattern.span, expr, &binder.a.typ, field_op);
                 let pattern_test = pattern_to_exprs_rec(ctx, state, &field_exp, &binder.a, decls)?;
-                let and = ExprX::Binary(BinaryOp::And, test, pattern_test);
-                test = SpannedTyped::new(&pattern.span, &t_bool, and);
+                test = conjoin(&pattern.span, &vec![test, pattern_test]);
             }
             Ok(test)
         }

@@ -36,7 +36,7 @@ struct LeanCtx<'a> {
     typs: Vec<Typ>, // CC: Replace with manual hash set/map later?
     dts: HashSet<Dt>,
     fns: HashSet<Fun>,
-    asserts_to_serialize: Vec<(&'a Exp, Fun)>,
+    asserts_to_serialize: Vec<(&'a Exp, Fun, Arc<String>)>,
 }
 
 fn start_by_lean(lctx: &mut LeanCtx) {
@@ -53,8 +53,13 @@ fn is_by_lean_active(lctx: &LeanCtx) -> bool {
 }
 
 // TODO: Don't clone, work with lifetimes to say that `LeanCtx` and `Exp` come from the same place
-fn add_by_lean_assertion<'lctx>(lctx: &mut LeanCtx<'lctx>, exp: &'lctx Exp) {
-    lctx.asserts_to_serialize.push((exp, lctx.current_fun.clone().unwrap()));
+fn add_by_lean_assertion<'lctx>(lctx: &mut LeanCtx<'lctx>, exp: &'lctx Exp, mode: &'lctx LeanMode) {
+    match mode {
+        LeanMode::Proof(theorem_name) => {
+            lctx.asserts_to_serialize.push((exp, lctx.current_fun.clone().unwrap(), theorem_name.clone()));
+        }
+        _ => {}
+    }
 }
 
 /*
@@ -387,9 +392,9 @@ fn lvisit_stm<'lctx>(lctx: &mut LeanCtx<'lctx>, stm: &'lctx Stm) {
             lvisit_exp(lctx, exp);
         }
         // TODO: requires/ensures?
-        StmX::AssertLean { body, .. } => {
+        StmX::AssertLean { body, mode } => {
             start_by_lean(lctx);
-            add_by_lean_assertion(lctx, body);
+            add_by_lean_assertion(lctx, body, mode);
             lvisit_exp(lctx, body);
             stop_by_lean(lctx);
         }
@@ -652,9 +657,9 @@ pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
     // The `fun_assert_map` maintains a per-function count of assertions
     // TODO: Serialize the assertions in order of the functions in the SCCs
     let mut fun_assert_map: HashMap<&Fun, u32> = HashMap::new();
-    for (assert, f) in lctx.asserts_to_serialize.iter() {
+    for (assert, f, theorem_name) in lctx.asserts_to_serialize.iter() {
         let counter = *fun_assert_map.get(f).unwrap_or(&1);
-        let assert = serialize_assert(ctx, assert, f, counter);
+        let assert = serialize_assert(ctx, assert, f, theorem_name, counter);
         decls.push(assert);
         fun_assert_map.insert(f, counter + 1);
     }
@@ -751,11 +756,12 @@ fn serialize_fn(ctx: &Ctx, fun: &Fun) -> Option<serde_json::Value> {
 }
 
 // Serializes the expression under the assertion
-fn serialize_assert(_ : &Ctx, e: &Exp, f: &Fun, id: u32) -> serde_json::Value {
+fn serialize_assert(_ : &Ctx, e: &Exp, f: &Fun, theorem_name: &Arc<String>, id: u32) -> serde_json::Value {
     serde_json::json! {
         {
             DECL_TYPE: ASSERT_DECL,
             "AssertId": id,
+            "Name": theorem_name,
             "ParentFn": f,
             DECL_VAL: e,
         }
