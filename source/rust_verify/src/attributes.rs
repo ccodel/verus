@@ -702,6 +702,7 @@ pub(crate) fn parse_attrs(
                             "bit_vector" => v.push(Attr::BitVector),
                             "integer_ring" => v.push(Attr::IntegerRing),
                             "lean" => v.push(Attr::Lean),
+                            "lean_proof" => v.push(Attr::Lean),
                             _ => return err_span(span, "invalid prover"),
                         }
                     }

@@ -473,6 +473,27 @@ fn lvisit_func_sst<'lctx>(lctx: &mut LeanCtx<'lctx>, sst: &'lctx FunctionSst) {
     if lctx.fns.contains(f) { return; }
 
     if !is_by_lean_active(lctx) {
+        // Special case: spec functions marked `by (lean)`
+        if sst.mode == Mode::Spec {
+            if sst.attrs.lean {
+                lctx.fns.insert(f.clone());
+                start_by_lean(lctx);
+                lctx.current_fun = Some(f.clone());
+
+                lvisit_pars(lctx, &sst.pars);
+                lvisit_par(lctx, &sst.ret);
+
+                // A spec function's body is found in the `spec_axioms`
+                sst.axioms.spec_axioms.as_ref()
+                    .map(|axioms| lvisit_exp(lctx, &axioms.body_exp));
+
+                lctx.current_fun = None;
+                stop_by_lean(lctx);
+            }
+
+            return;
+        }
+
         // If we haven't encountered a `by (lean)` yet,
         // see if this is a proof function with a `by (lean)` attribute
         let Some(proof) = &sst.exec_proof_check else { return; };
@@ -602,8 +623,6 @@ pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
 
     // Visit all of the functions to check for `by (lean)` attributes
     for sst in krate.functions.iter() {
-        // Spec functions cannot contain `by (lean)`, so we skip them
-        if sst.x.mode == Mode::Spec { continue; }
         lvisit_func_sst(&mut lctx, sst);
     }
     
