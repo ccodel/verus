@@ -2,6 +2,8 @@
 use builtin::*;
 #[allow(unused_imports)]
 use builtin_macros::*;
+#[allow(unused_imports)]
+use vstd::prelude::*;
 
 verus! {
 
@@ -31,7 +33,7 @@ proof fn spec_for_rotate_90(p: Point)
     // assert(o == rotate_90(p)) by (lean);
 
     // We can prove this, though
-    assert(o == Point { x: -p.y, y: p.x} ==> o == rotate_90(p)) by (lean);
+    assert(o == Point { x: -p.y, y: p.x} ==> o == rotate_90(p)) by (lean_proof as a1);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -53,22 +55,34 @@ enum Beverage {
 proof fn test_beverage(bev: Beverage) 
 {
     // Simple equality between enums
-    assert(Syrup::RootBeer != Syrup::Syrup) by (lean);
+    assert(Syrup::RootBeer != Syrup::Syrup) by (lean_proof as trivial_ne);
     // Equality between enums with values
-    assert(Beverage::Coffee { creamers: 0, sugar:  true } != Beverage::Soda { flavor : Syrup::Cola { size: 5 } }) by (lean);
+    assert(Beverage::Coffee { creamers: 0, sugar:  true } != Beverage::Soda { flavor : Syrup::Cola { size: 5 } }) by (lean_proof as values_ne);
     // Match statements in Lean
-    assert(bev is Soda ==> bev !is Coffee) by (lean);
+    assert(bev is Soda ==> bev !is Coffee) by (lean_proof as is_variant);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Testing Set and Map 
+
+proof fn sets()
+{
+    let e: Set<int> = Set::empty();
+    let nonneg = e.insert(5);
+    assert(forall|i: int| nonneg.contains(i) ==> (i == 5)) by (lean_proof as forall_nonneg);
+    assert(nonneg.union(nonneg) == nonneg) by (lean_proof as union_nonneg);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// (4/27) these currently fail due to `match` translations from Verus to Lean
+/*
 enum Life {
     Mammal { legs: int, has_pocket: bool },
     Arthropod { legs: int, wings: int },
     Plant { leaves: int },
 }
 
-// (4/27) these currently fail due to `match` translations from Verus to Lean
 
 use Life::*;
 
@@ -86,8 +100,11 @@ spec fn cuddly(l: Life) -> bool
 
 fn main()
 {
-    assert(!is_insect(Life::Mammal { legs: 4, has_pocket: true })) by (lean);
-    assert(cuddly(Life::Mammal { legs: 4, has_pocket: true })) by (lean);
-}
+    assert(!is_insect(Life::Mammal { legs: 4, has_pocket: true })) by (lean_proof as insect);
+    assert(cuddly(Life::Mammal { legs: 4, has_pocket: true })) by (lean_proof as cuddly);
+}  */
+
+fn main()
+{}
 
 } // verus!

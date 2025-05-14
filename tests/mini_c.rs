@@ -384,7 +384,7 @@ proof fn WellTypedCommandSuccess(d:Declarations, s:State, c:Command)
 //   If evaluating a well-typed command using a well-typed store
 //   does not time out, then it must succeed (i.e., it doesn't fail),
 //   and it produces a well-typed store
-proof fn TypeSafety(d:Declarations, s:State, c:Command) by (lean)
+proof fn TypeSafety(d:Declarations, s:State, c:Command) by (lean_proof)
     requires
         StoreWellTyped(d, s.store),
         CommandWellTyped(d, c),
