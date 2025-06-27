@@ -524,6 +524,19 @@ where
                         }
                     }
                 }
+                ExprX::MatchBlock { arm_decls, arm_body, .. } => {
+                    // We don't visit match_expr and pattern_expr, because they are visited elsewhere
+                    for stmt in arm_decls.iter() {
+                        expr_visitor_control_flow!(stmt_visitor_dfs(stmt, map, mf));
+                    }
+                    expr_visitor_control_flow!(expr_visitor_dfs(arm_body, map, mf));
+                    for stmt in arm_decls.iter() {
+                        match &stmt.x {
+                            StmtX::Expr(_) => {}
+                            StmtX::Decl { .. } => map.pop_scope(),
+                        }
+                    }
+                }
                 ExprX::NeverToAny(e) => {
                     expr_visitor_control_flow!(expr_visitor_dfs(e, map, mf))
                 }
@@ -1079,6 +1092,29 @@ where
                 }
             }
             ExprX::Block(Arc::new(stmts), expr1)
+        }
+        ExprX::MatchBlock { match_expr, pattern_expr, arm_decls, arm_body, .. } => {
+            let mut stmts: Vec<Stmt> = Vec::new();
+            for s in arm_decls.iter() {
+                match &s.x {
+                    StmtX::Expr(_) => {}
+                    StmtX::Decl { .. } => map.push_scope(true),
+                }
+                stmts.append(&mut map_stmt_visitor_env(s, map, env, fe, fs, ft)?);
+            }
+            let expr1 = map_expr_visitor_env(arm_body, map, env, fe, fs, ft)?;
+            for s in arm_decls.iter() {
+                match &s.x {
+                    StmtX::Expr(_) => {}
+                    StmtX::Decl { .. } => map.pop_scope(),
+                }
+            }
+            ExprX::MatchBlock {
+                match_expr: match_expr.clone(),
+                pattern_expr: pattern_expr.clone(),
+                arm_decls: Arc::new(stmts),
+                arm_body: expr1 
+            }
         }
         ExprX::OpenInvariant(e1, binder, e2, atomicity) => {
             let expr1 = map_expr_visitor_env(e1, map, env, fe, fs, ft)?;

@@ -79,7 +79,7 @@ pub(crate) struct State<'a> {
     pub mask: Option<MaskSet>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum ReturnValue {
     Some(Exp),
     ImplicitUnit(Span),
@@ -2383,6 +2383,23 @@ pub(crate) fn expr_to_stm_opt(
                     Ok((vec![block], exp))
                 }
             }
+        }
+        ExprX::MatchBlock { match_expr, pattern_expr, arm_decls, arm_body } => {
+            // Use as much other infrastructure as possible
+            let (_, match_exp) = expr_to_stm_opt(ctx, state, match_expr)?;
+            let (_, pattern_exp) = expr_to_stm_opt(ctx, state, pattern_expr)?;
+            println!("pattern_exp: {:?}", pattern_exp);
+            println!("match_exp: {:?}", match_exp);
+            // let block = ExprX::Block(Arc::new(temp_decl), Some(if_expr));
+            // SpannedTyped::new(&expr.span, &expr.typ, block)
+            let orig_block_base = ExprX::Block(arm_decls.clone(), Some(arm_body.clone()));
+            let orig_block = SpannedTyped::new(
+                &expr.span,
+                &expr.typ,
+                orig_block_base,
+            );
+            let (blocks, block_exp) = expr_to_stm_opt(ctx, state, &orig_block)?;
+            Ok((blocks, block_exp))
         }
         ExprX::AirStmt(s) => {
             let stmt = Spanned::new(expr.span.clone(), StmX::Air(s.clone()));

@@ -506,7 +506,13 @@ fn simplify_one_expr(
                         SpannedTyped::new(&arm.x.pattern.span, &t_bool, block)
                     }
                 };
-                let block = ExprX::Block(Arc::new(decls), Some(arm.x.body.clone()));
+                //let block = ExprX::Block(Arc::new(decls), Some(arm.x.body.clone()));
+                let block = ExprX::MatchBlock {
+                    match_expr: expr0.clone(),
+                    pattern_expr: test.clone(),
+                    arm_decls: Arc::new(decls),
+                    arm_body: arm.x.body.clone(),
+                };
                 let body = SpannedTyped::new(&arm.x.pattern.span, &expr.typ, block);
                 if let Some(prev) = if_expr {
                     // if pattern && guard then body else prev
