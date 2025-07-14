@@ -245,11 +245,13 @@ fn lvisit_loop_invs(lctx: &mut LeanCtx, invs: &LoopInvs) {
 }
 
 fn lvisit_fun(lctx: &mut LeanCtx, fun: &Fun) {
+    // println!("Visiting function: {:?}", fun);
     if !is_by_lean_active(lctx) { return; }
     if lctx.fns.contains(fun) { return; }
+    // println!("Function not added yet: {:?}", fun);
 
     // TODO are there any problems with one polymorphic function but multiple instantiations?
-    let sst= lctx.ctx.func_sst_map.get(fun).unwrap();
+    let sst = lctx.ctx.func_sst_map.get(fun).unwrap();
     lvisit_func_sst(lctx, sst);
 }
 
@@ -308,6 +310,7 @@ fn lvisit_exp(lctx: &mut LeanCtx, exp: &Exp) {
         }
         // Skip ExpX::Old       (no new context to visit)
         ExpX::Call(call_fun, typs, exps) => {
+            // println!("Visiting call: {:?}", call_fun);
             lvisit_call_fun(lctx, call_fun);
             lvisit_typs(lctx, typs);
             lvisit_exps(lctx, exps);
@@ -366,6 +369,7 @@ fn lvisit_dest(lctx: &mut LeanCtx, dest: &Dest) {
 fn lvisit_stm<'lctx>(lctx: &mut LeanCtx<'lctx>, stm: &'lctx Stm) {
     match &stm.x {
         StmX::Call { fun, typ_args, args, dest, .. } => {
+            // println!("Visiting stm call: {:?}", fun);
             // TODO resolved method?
             lvisit_fun(lctx, fun);
             lvisit_typs(lctx, typ_args);
@@ -418,16 +422,16 @@ fn lvisit_stm<'lctx>(lctx: &mut LeanCtx<'lctx>, stm: &'lctx Stm) {
                 lvisit_stm(lctx, stm2);
             }
         }
-        StmX::Loop { cond, body, invs, typ_inv_vars, .. } => {
+        StmX::Loop { cond, body, invs, decrease, typ_inv_vars, .. } => {
             // CC: TODO missing decrease, etc.
 
             if let Some((stm, exp)) = cond {
                 lvisit_stm(lctx, stm);
                 lvisit_exp(lctx, exp);
             }
-
             lvisit_stm(lctx, body);
             lvisit_loop_invs(lctx, invs);
+            lvisit_exps(lctx, decrease);
             for p in typ_inv_vars.iter() {
                 lvisit_typ(lctx, &p.1);
             }
@@ -469,12 +473,15 @@ fn lvisit_func_sst<'lctx>(lctx: &mut LeanCtx<'lctx>, sst: &'lctx FunctionSst) {
     let sst = &sst.x;
     let f = &sst.name;
 
+    // println!("[lvisit_func_sst] Visiting function: {:?}", f);
     // Skip the function if we've done a Lean analysis
     if lctx.fns.contains(f) { return; }
+    // println!("[lvisit_func_sst] Function not added yet: {:?}", f);
 
     if !is_by_lean_active(lctx) {
         // Special case: spec functions marked `by (lean)`
         if sst.mode == Mode::Spec {
+            // println!("[lvisit_func_sst] Visiting spec function: {:?}", f);
             if sst.attrs.lean {
                 lctx.fns.insert(f.clone());
                 start_by_lean(lctx);
@@ -490,7 +497,6 @@ fn lvisit_func_sst<'lctx>(lctx: &mut LeanCtx<'lctx>, sst: &'lctx FunctionSst) {
                 lctx.current_fun = None;
                 stop_by_lean(lctx);
             }
-
             return;
         }
 
@@ -499,6 +505,7 @@ fn lvisit_func_sst<'lctx>(lctx: &mut LeanCtx<'lctx>, sst: &'lctx FunctionSst) {
         let Some(proof) = &sst.exec_proof_check else { return; };
 
         if sst.attrs.lean {
+            // println!("[lvisit_func_sst] Visiting proof function: {:?}", f);
             lctx.fns.insert(f.clone());
             start_by_lean(lctx);
             lctx.current_fun = Some(f.clone());
@@ -506,6 +513,7 @@ fn lvisit_func_sst<'lctx>(lctx: &mut LeanCtx<'lctx>, sst: &'lctx FunctionSst) {
             lvisit_pars(lctx, &sst.pars);
             // lvisit_par(lctx, &sst.ret); // Enforced to be empty
             lvisit_exps(lctx, &proof.reqs);
+            // println!("[lvisit_func_sst] Visiting ensures in proof function: {:?}", f);
             lvisit_exps(lctx, &proof.post_condition.ens_exps);
             // lvisit_stm(lctx, &proof.body); // Enforced to be empty
 
@@ -526,6 +534,13 @@ fn lvisit_func_sst<'lctx>(lctx: &mut LeanCtx<'lctx>, sst: &'lctx FunctionSst) {
                 lctx.fns.insert(f.clone());
                 lvisit_pars(lctx, &sst.pars);
                 lvisit_par(lctx, &sst.ret);
+
+                if let Some(spec_axioms) = &sst.axioms.spec_axioms {
+                    if let Some(termination_check) = &spec_axioms.termination_check {
+                        // println!("[lvisit_func_sst] Visiting termination check for spec function: {:?}", f);
+                        lvisit_stm(lctx, &termination_check.body);
+                    }
+                }
 
                 // A spec function's body is found in the `spec_axioms`
                 sst.axioms.spec_axioms.as_ref()
@@ -623,6 +638,7 @@ pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
 
     // Visit all of the functions to check for `by (lean)` attributes
     for sst in krate.functions.iter() {
+        // println!("Function encountered: {:?}", (&sst.x).name);
         lvisit_func_sst(&mut lctx, sst);
     }
     
@@ -633,37 +649,68 @@ pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
     let mut decls: Vec<serde_json::Value> = Vec::new();
 
     // Take the values in the `dts` and sort them topologically
-    let mut graph = Graph::new();
+    let mut datatype_graph = Graph::new();
     for dt in lctx.dts.iter() {
-        graph.add_node(dt.clone());
+        datatype_graph.add_node(dt.clone());
     }
 
-    compute_all_dt_deps(&lctx, &mut graph);
-    graph.compute_sccs(); 
+    compute_all_dt_deps(&lctx, &mut datatype_graph);
+    datatype_graph.compute_sccs(); 
 
     // Serialize everything!
     this_thread_start_skipping_nonlean_fields();
 
+    // for f in lctx.fns.iter() {
+    //     println!("Function to serialize: {:?}", f);
+    // }
+
     // Loop through the datatype connected components and serialize them as they come
-    let representatives = graph.sort_sccs();
+    let representatives = datatype_graph.sort_sccs();
     for rep in representatives.iter() {
-        let scc = graph.get_scc_nodes(rep);
+        let scc = datatype_graph.get_scc_nodes(rep);
         // TODO: Mutual blocks around sccs of length greater than 1
-        for dt in scc.iter() {
+        if scc.len() == 1 {
+            // If the SCC has only one node, we serialize it as a single datatype
+            let dt = scc.first().unwrap();
             // Skip tuples, since they are handled natively by `Prod` in Lean
             match dt {
                 Dt::Tuple(..) => { continue }
                 Dt::Path(..) => { decls.push(serialize_dt(ctx, dt)) }
             }
+        } else if scc.len() > 1 {
+            // If the SCC has more than one node, we serialize it as a mutual block
+            let mut dts: Vec<serde_json::Value> = Vec::new();
+            for dt in scc.iter() {
+                // Skip tuples
+                match dt {
+                    Dt::Tuple(..) => { continue }
+                    Dt::Path(..) => { dts.push(serialize_dt(ctx, dt)); }
+                }
+            }
+            decls.push(serialize_mut_block(dts));
         }
     }
 
     // Loop through the functions in the connected component, serializing in order
     for node in ctx.global.func_call_sccs.iter() {
+        let nodes = ctx.global.func_call_graph.get_scc_nodes(node);
         match node {
             Node::Fun(f) => {
-                if lctx.fns.contains(f) {
-                    decls.push(serialize_fn(ctx, f).unwrap());
+                if nodes.len() == 1 {
+                    if lctx.fns.contains(f) {
+                        decls.push(serialize_fn(ctx, f).unwrap());
+                    }
+                } else if nodes.len() > 1 { // If the SCC has more than one node, we serialize it as a mutual block
+                    let mut funs: Vec<serde_json::Value> = Vec::new();
+                    for f in nodes.iter() {
+                        if let Node::Fun(f) = f {
+                            if let Some(fn_val) = serialize_fn(ctx, f) {
+                                funs.push(fn_val);
+                            }
+                        }
+                    }
+                    // Serialize the mutual block with all the functions in it
+                    decls.push(serialize_mut_block(funs));
                 }
             }
             // TODO traits, etc.
@@ -772,6 +819,15 @@ fn serialize_fn(ctx: &Ctx, fun: &Fun) -> Option<serde_json::Value> {
             DECL_VAL: sst,
         }
     })
+}
+
+fn serialize_mut_block(funs: Vec<serde_json::Value>) -> serde_json::Value {
+    serde_json::json! {
+        {
+            DECL_TYPE: "Mutual",
+            DECL_VAL: funs,
+        }
+    }
 }
 
 // Serializes the expression under the assertion

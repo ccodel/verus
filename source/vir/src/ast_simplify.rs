@@ -486,6 +486,9 @@ fn simplify_one_expr(
             }
         }
         ExprX::Match(expr0, arms1) => {
+            // if cfg!(feature = "lean") {
+            //     return Ok(expr.clone()); // try to not cascade match expressions into If expressions
+            // }
             let (temp_decl, expr0) = small_or_temp(state, &expr0);
             // Translate into If expression
             let t_bool = Arc::new(TypX::Bool);
