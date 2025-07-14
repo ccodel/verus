@@ -2487,6 +2487,9 @@ pub(crate) fn expr_to_stm_opt(
             Ok(if_to_stm(state, expr, stms0, &e0, stms1, &e1, stms2, &e2))
         }
         ExprX::Match(..) => {
+            // if cfg!(feature = "lean") {
+            //     return Ok(if_to_stm());
+            // }
             panic!("internal error: Match should have been simplified by ast_simplify")
         }
         ExprX::Loop {

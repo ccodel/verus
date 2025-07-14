@@ -34,6 +34,11 @@ proof fn spec_for_rotate_90(p: Point)
 
     // We can prove this, though
     assert(o == Point { x: -p.y, y: p.x} ==> o == rotate_90(p)) by (lean_proof as a1);
+    // Or, we can write it as this
+    assert({
+        let o = Point { x: -p.y, y: p.x };
+        o == rotate_90(p)
+    }) by (lean_proof as a2);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -57,7 +62,7 @@ proof fn test_beverage(bev: Beverage)
     // Simple equality between enums
     assert(Syrup::RootBeer != Syrup::Syrup) by (lean_proof as trivial_ne);
     // Equality between enums with values
-    assert(Beverage::Coffee { creamers: 0, sugar:  true } != Beverage::Soda { flavor : Syrup::Cola { size: 5 } }) by (lean_proof as values_ne);
+    assert(Beverage::Coffee { creamers: 0, sugar: true } != Beverage::Soda { flavor : Syrup::Cola { size: 5 } }) by (lean_proof as values_ne);
     // Match statements in Lean
     assert(bev is Soda ==> bev !is Coffee) by (lean_proof as is_variant);
 }

@@ -45,8 +45,8 @@ fn test_triangle_fail() {
 */
 
 // ANCHOR: step_by_step
-fn test_triangle_step_by_step() {
-    assert(triangle(0) == 0);
+proof fn test_triangle_step_by_step() {
+    assert(triangle(0) == 0) by (lean);
     assert(triangle(1) == 1);
     assert(triangle(2) == 3);
     assert(triangle(3) == 6);
