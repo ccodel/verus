@@ -359,6 +359,14 @@ pub(crate) trait Visitor<R: Returner, Err, Scope: Scoper> {
                 let es = self.visit_exps(es)?;
                 R::ret(|| exp_new(ExpX::ArrayLiteral(R::get_vec_a(es))))
             }
+            ExpX::MatchBlock { scrutinee, simplified_body } => {
+                let scrutinee = self.visit_exp(scrutinee)?;
+                let simplified_body = self.visit_exp(simplified_body)?;
+                R::ret(|| exp_new(ExpX::MatchBlock {
+                    scrutinee: R::get(scrutinee),
+                    simplified_body: R::get(simplified_body),
+                }))
+            }
             ExpX::Interp(_) => R::ret(|| exp.clone()),
         }
     }

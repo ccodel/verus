@@ -44,6 +44,11 @@ verus! {
     assert(get_data_in_box(b) >= 0) by (lean_proof as a1);
   }
 
+  proof fn test_is_operator(s: Sport)
+  {
+    assert(s is Soccer) by (lean_proof as a1);
+  }
+
   fn main() 
   {
   }

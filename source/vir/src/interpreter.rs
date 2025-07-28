@@ -533,6 +533,9 @@ fn hash_exp<H: Hasher>(state: &mut H, exp: &Exp) {
             dohash!(17, fun);
         }
         ArrayLiteral(es) => dohash!(18; hash_exps(es)),
+        MatchBlock { scrutinee, simplified_body } => {
+            dohash!(20; hash_exp(scrutinee), hash_exp(simplified_body))
+        }
         FuelConst(i) => {
             dohash!(19, i);
         }
@@ -1734,6 +1737,10 @@ fn eval_expr_internal(ctx: &Ctx, state: &mut State, exp: &Exp) -> Result<Exp, Vi
         // Ignored by the interpreter at present (i.e., treated as symbolic)
         VarAt(..) | VarLoc(..) | Loc(..) | Old(..) | WithTriggers(..) | StaticVar(..) => ok,
         ExecFnByName(_) => ok,
+        MatchBlock { scrutinee: _, simplified_body } => {
+            let simplified = eval_expr_internal(ctx, state, simplified_body)?;
+            exp_new(simplified.x.clone())
+        }
         FuelConst(_) => ok,
     };
     let res = r?;

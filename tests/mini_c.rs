@@ -269,7 +269,7 @@ enum Type {
 
 type Declarations = Map<Variable, Type>;
 
-spec fn ExprHasType(d:Declarations, e:Expr, t:Type) -> bool 
+spec fn ExprHasType(d:Declarations, e:Expr, t:Type) -> bool by (lean)
     decreases e
 {
     match e {
@@ -384,7 +384,7 @@ proof fn WellTypedCommandSuccess(d:Declarations, s:State, c:Command)
 //   If evaluating a well-typed command using a well-typed store
 //   does not time out, then it must succeed (i.e., it doesn't fail),
 //   and it produces a well-typed store
-proof fn TypeSafety(d:Declarations, s:State, c:Command) by (lean_proof)
+proof fn TypeSafety(d:Declarations, s:State, c:Command)
     requires
         StoreWellTyped(d, s.store),
         CommandWellTyped(d, c),

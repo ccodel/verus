@@ -349,6 +349,10 @@ fn lvisit_exp(lctx: &mut LeanCtx, exp: &Exp) {
         ExpX::ArrayLiteral(exps) => {
             lvisit_exps(lctx, exps);
         }
+        ExpX::MatchBlock { scrutinee, simplified_body } => {
+            lvisit_exp(lctx, scrutinee);
+            lvisit_exp(lctx, simplified_body);
+        }
         _ => {}
     }
 }

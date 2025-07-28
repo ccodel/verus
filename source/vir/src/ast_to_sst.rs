@@ -2384,22 +2384,43 @@ pub(crate) fn expr_to_stm_opt(
                 }
             }
         }
-        ExprX::MatchBlock { match_expr, pattern_expr, arm_decls, arm_body } => {
-            // Use as much other infrastructure as possible
-            let (_, match_exp) = expr_to_stm_opt(ctx, state, match_expr)?;
-            let (_, pattern_exp) = expr_to_stm_opt(ctx, state, pattern_expr)?;
-            println!("pattern_exp: {:?}", pattern_exp);
-            println!("match_exp: {:?}", match_exp);
-            // let block = ExprX::Block(Arc::new(temp_decl), Some(if_expr));
-            // SpannedTyped::new(&expr.span, &expr.typ, block)
-            let orig_block_base = ExprX::Block(arm_decls.clone(), Some(arm_body.clone()));
-            let orig_block = SpannedTyped::new(
-                &expr.span,
-                &expr.typ,
-                orig_block_base,
-            );
-            let (blocks, block_exp) = expr_to_stm_opt(ctx, state, &orig_block)?;
-            Ok((blocks, block_exp))
+        ExprX::MatchBlock { match_expr, pattern_expr: _, arm_decls, arm_body } => {
+            let (_, match_ret) = expr_to_stm_opt(ctx, state, match_expr)?;
+            let match_exp = match match_ret.to_value() {
+                Some(exp) => exp,
+                None => {
+                    return Ok((vec![], ReturnValue::Never));
+                }
+            };
+            
+            // Create a Block and let the existing Block case to process it 
+            // to preserve "pure mathematical expression" when appropriate
+            let block_expr = ExprX::Block(arm_decls.clone(), Some(arm_body.clone()));
+            let block = SpannedTyped::new(&expr.span, &expr.typ, block_expr);
+            let (stms, block_ret) = expr_to_stm_opt(ctx, state, &block)?;
+            
+            match block_ret.to_value() {
+                Some(simplified_body) => {
+                    // Check if we should create a MatchBlock wrapper
+                    let expr_typ_str = format!("{:?}", &expr.typ);
+                    if expr_typ_str.contains("TypParam") || expr_typ_str.contains("RwLockToks") {
+                        // For types with type parameters or known problematic types,
+                        // just return the simplified body directly
+                        Ok((stms, ReturnValue::Some(simplified_body)))
+                    } else {
+                        // Create SST MatchBlock wrapper
+                        let match_block = ExpX::MatchBlock {
+                            scrutinee: match_exp,
+                            simplified_body,
+                        };
+                        let match_block_exp = SpannedTyped::new(&expr.span, &expr.typ, match_block);
+                        Ok((stms, ReturnValue::Some(match_block_exp)))
+                    }
+                }
+                None => {
+                    Ok((stms, ReturnValue::Never))
+                }
+            }
         }
         ExprX::AirStmt(s) => {
             let stmt = Spanned::new(expr.span.clone(), StmX::Air(s.clone()));

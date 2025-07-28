@@ -144,7 +144,8 @@ fn subst_exp_rec(
         | ExpX::If(..)
         | ExpX::ExecFnByName(..)
         | ExpX::FuelConst(..)
-        | ExpX::WithTriggers(..) => crate::sst_visitor::map_shallow_exp(
+        | ExpX::WithTriggers(..)
+        | ExpX::MatchBlock { .. } => crate::sst_visitor::map_shallow_exp(
             exp,
             &mut (substs, free_vars),
             &|_, t| Ok(subst_typ(typ_substs, t)),
@@ -659,6 +660,10 @@ impl ExpX {
                 }
             }
             FuelConst(i) => (format!("fuel({i:})"), 99),
+            MatchBlock { scrutinee, simplified_body: _ } => {
+                // Display TODO
+                (format!("match {}", scrutinee.x.to_user_string(global)), 99)
+            }
             Old(..) | WithTriggers(..) => ("".to_string(), 99), // We don't show the user these internal expressions
         };
         if precedence <= inner_precedence { s } else { format!("({})", s) }

@@ -113,6 +113,13 @@ fn insert_auto_ext_equal(ctx: &Ctx, exp: &Exp) -> Exp {
             let es = es.iter().map(|e| insert_auto_ext_equal(ctx, e)).collect();
             exp.new_x(ExpX::ArrayLiteral(Arc::new(es)))
         }
+        ExpX::MatchBlock { scrutinee, simplified_body } => {
+            let simplified_body = insert_auto_ext_equal(ctx, simplified_body);
+            exp.new_x(ExpX::MatchBlock {
+                scrutinee: scrutinee.clone(),
+                simplified_body,
+            })
+        }
         ExpX::Const(_)
         | ExpX::Var(_)
         | ExpX::StaticVar(_)

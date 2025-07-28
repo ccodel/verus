@@ -694,6 +694,11 @@ fn visit_exp(ctx: &Ctx, state: &mut State, exp: &Exp) -> Exp {
             let typ = coerce_typ_to_poly(ctx, &exp.typ);
             mk_exp_typ(&typ, ExpX::ArrayLiteral(es))
         }
+        ExpX::MatchBlock { scrutinee, simplified_body } => {
+            let scrutinee = visit_exp(ctx, state, scrutinee);
+            let simplified_body = visit_exp(ctx, state, simplified_body);
+            mk_exp(ExpX::MatchBlock { scrutinee, simplified_body })
+        }
         ExpX::Interp(_) => panic!("unexpected ExpX::Interp"),
         ExpX::FuelConst(_) => exp.clone(),
     }

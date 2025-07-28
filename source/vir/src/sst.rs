@@ -89,6 +89,8 @@ pub enum ExpX {
     If(Exp, Exp, Exp),
     WithTriggers(Trigs, Exp),
     Bind(Bnd, Exp),
+    // MatchBlock wraps the simplified if-else chain but preserves original match info for Lean
+    MatchBlock { scrutinee: Exp, simplified_body: Exp },
     ExecFnByName(Fun),
     ArrayLiteral(Exps),
     // only used internally by the interpreter; should never be seen outside it
