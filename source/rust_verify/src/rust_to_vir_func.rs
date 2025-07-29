@@ -174,6 +174,7 @@ fn handle_autospec<'tcx>(
                     bit_vector: false,
                     atomic: false,
                     integer_ring: false,
+                    lean: false,
                     is_decrease_by: false,
                     check_recommends: false,
                     nonlinear: false,
