@@ -114,6 +114,8 @@ pub enum ExpX {
     Bind(Bnd, Exp),
     /// Reference to an exec function as a first-class value
     ExecFnByName(Fun),
+    // MatchBlock wraps the simplified if-else chain but preserves original match info for Lean
+    MatchBlock { scrutinee: Exp, simplified_body: Exp },
     /// Fixed-size array literal
     ArrayLiteral(Exps),
     /// Internal interpreter value; should never escape the interpreter

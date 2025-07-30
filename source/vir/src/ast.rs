@@ -983,6 +983,7 @@ pub struct CtorUpdateTail {
     pub taken_fields: Arc<Vec<(Ident, UnfinalizedReadKind)>>,
 }
 
+
 /// Expression, similar to rustc_hir::Expr
 pub type Expr = Arc<SpannedTyped<ExprX>>;
 pub type Exprs = Arc<Vec<Expr>>;
@@ -1124,6 +1125,8 @@ pub enum ExprX {
     ProofInSpec(Expr),
     /// Sequence of statements, optionally including an expression at the end
     Block(Stmts, Option<Expr>),
+    // TODO: Or place a `Block` inside of a `MatchBlock` but identify it with `match_expr` and `pattern_expr`?
+    MatchBlock { match_expr: Expr, pattern_expr: Expr, arm_decls: Stmts, arm_body: Expr },
     /// Inline AIR statement
     AirStmt(Arc<String>),
     /// never-to-any conversion

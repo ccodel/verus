@@ -2707,6 +2707,16 @@ fn check_expr_handle_mut_arg(
             check_expr_has_mode(ctxt, record, typing, Mode::Spec, body, Mode::Spec)?;
             Ok(Mode::Proof)
         }
+        ExprX::AssertLean { requires, body, mode: _ } => {
+            if ctxt.check_ghost_blocks && typing.block_ghostness == Ghost::Exec {
+                return Err(error(&expr.span, "cannot use assert in exec mode"));
+            }
+            for req in requires.iter() {
+                check_expr_has_mode(ctxt, record, typing, Mode::Spec, req, Mode::Spec)?;
+            }
+            check_expr_has_mode(ctxt, record, typing, Mode::Spec, body, Mode::Spec)?;
+            Ok(Mode::Proof)
+        }
         ExprX::If(e1, e2, e3) => {
             let condition_expect = match typing.block_ghostness {
                 Ghost::Exec => Expect(Mode::Exec),
@@ -3054,6 +3064,11 @@ fn check_expr_handle_mut_arg(
                 }
             };
             Ok(mode)
+        }
+        ExprX::MatchBlock { arm_decls, arm_body, .. } => {
+            let block_base = ExprX::Block(arm_decls.clone(), Some(arm_body.clone()));
+            let block = crate::ast::SpannedTyped::new(&expr.span, &expr.typ, block_base);
+            return check_expr_handle_mut_arg( ctxt, record, typing, outer_mode, &block);
         }
         ExprX::OpenInvariant(inv, binder, body, atomicity) => {
             if outer_mode == Mode::Spec {
