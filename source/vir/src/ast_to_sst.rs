@@ -79,7 +79,7 @@ pub(crate) struct State<'a> {
     pub mask: Option<MaskSet>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum ReturnValue {
     Some(Exp),
     ImplicitUnit(Span),
@@ -2466,6 +2466,46 @@ pub(crate) fn expr_to_stm_opt(
                     }
                     let block = Spanned::new(expr.span.clone(), StmX::Block(Arc::new(stms)));
                     Ok((vec![block], exp))
+                }
+            }
+        }
+        ExprX::MatchBlock { match_expr, pattern_expr: _, arm_decls, arm_body } => {
+            let (_, match_ret) = expr_to_stm_opt(ctx, state, match_expr)?;
+            let match_exp = match match_ret.to_value() {
+                Some(exp) => exp,
+                None => {
+                    return Ok((vec![], ReturnValue::Never));
+                }
+            };
+            
+            // Create a Block and let the existing Block case to process it 
+            // to preserve "pure mathematical expression" when appropriate
+            let block_expr = ExprX::Block(arm_decls.clone(), Some(arm_body.clone()));
+            let block = SpannedTyped::new(&expr.span, &expr.typ, block_expr);
+            let (stms, block_ret) = expr_to_stm_opt(ctx, state, &block)?;
+            
+            match block_ret.to_value() {
+                Some(body) => {
+                    // CZ: This is a workaround to avoid creating MatchBlock in vstd code
+                    // TODO: Is this good practice?
+                    let span_str = format!("{:?}", &expr.span);
+                    let is_vstd_code = span_str.contains("vstd");
+                    
+                    if !is_vstd_code {
+                        // Create SST MatchBlock wrapper
+                        let match_block = ExpX::MatchBlock {
+                            scrutinee: match_exp,
+                            body,
+                        };
+                        let match_block_exp = SpannedTyped::new(&expr.span, &expr.typ, match_block);
+                        return Ok((stms, ReturnValue::Some(match_block_exp)));
+                    }
+                    
+                    // For vstd code, just return the original body directly
+                    Ok((stms, ReturnValue::Some(body)))
+                }
+                None => {
+                    Ok((stms, ReturnValue::Never))
                 }
             }
         }

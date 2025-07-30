@@ -313,6 +313,9 @@ fn check_trigger_expr(
             ExpX::Interp(_) => {
                 panic!("Found an interpreter expression {:?} outside the interpreter", exp)
             }
+            ExpX::MatchBlock { scrutinee: _, body } => {
+                Err(error(&exp.span, "triggers cannot contain matchblocks (wrappers around if/else)"))
+            }
             ExpX::FuelConst(_) => {
                 panic!("Found FuelConst expression during trigger selection")
             }

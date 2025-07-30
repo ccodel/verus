@@ -497,6 +497,9 @@ fn gather_terms(ctxt: &mut Ctxt, ctx: &Ctx, exp: &Exp, depth: u64) -> (bool, Ter
         ExpX::Interp(_) => {
             panic!("Found an interpreter expression {:?} outside the interpreter", exp)
         }
+        ExpX::MatchBlock { scrutinee: _, body } => {
+            gather_terms(ctxt, ctx, body, depth)
+        }
         ExpX::FuelConst(_) => {
             panic!("Found a FuelConst expression in trigger selection")
         }

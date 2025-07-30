@@ -537,6 +537,9 @@ fn hash_exp<H: Hasher>(state: &mut H, exp: &Exp) {
         FuelConst(i) => {
             dohash!(19, i);
         }
+        MatchBlock { scrutinee, body } => {
+            dohash!(20; hash_exp(scrutinee), hash_exp(body))
+        }
     }
 }
 
@@ -1736,6 +1739,10 @@ fn eval_expr_internal(ctx: &Ctx, state: &mut State, exp: &Exp) -> Result<Exp, Vi
         VarAt(..) | VarLoc(..) | Loc(..) | Old(..) | WithTriggers(..) | StaticVar(..) => ok,
         ExecFnByName(_) => ok,
         FuelConst(_) => ok,
+        MatchBlock { scrutinee: _, body } => {
+            let new_body = eval_expr_internal(ctx, state, body)?;
+            exp_new(new_body.x.clone())
+        }
     };
     let res = r?;
     state.depth -= 1;

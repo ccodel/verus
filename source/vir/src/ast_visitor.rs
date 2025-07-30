@@ -602,6 +602,18 @@ pub(crate) trait AstVisitor<R: Returner, Err, Scope: Scoper> {
                 let e = self.visit_expr(e)?;
                 R::ret(|| expr_new(ExprX::NeverToAny(R::get(e))))
             }
+            ExprX::MatchBlock { match_expr, pattern_expr, arm_decls, arm_body } => {
+                let match_expr = self.visit_expr(match_expr)?;
+                let pattern_expr = self.visit_expr(pattern_expr)?;
+                let arm_decls = R::map_vec_and_flatten(arm_decls, &mut |s| self.visit_stmt(s))?;
+                let arm_body = self.visit_expr(arm_body)?;
+                R::ret(|| expr_new(ExprX::MatchBlock {
+                    match_expr: R::get(match_expr),
+                    pattern_expr: R::get(pattern_expr),
+                    arm_decls: R::get_vec_a(arm_decls),
+                    arm_body: R::get(arm_body),
+                }))
+            }
         }
     }
 

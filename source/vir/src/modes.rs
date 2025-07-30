@@ -1577,6 +1577,11 @@ fn check_expr_handle_mut_arg(
             };
             Ok(mode)
         }
+        ExprX::MatchBlock { arm_decls, arm_body, .. } => {
+            let block_base = ExprX::Block(arm_decls.clone(), Some(arm_body.clone()));
+            let block = crate::ast::SpannedTyped::new(&expr.span, &expr.typ, block_base);
+            return check_expr_handle_mut_arg( ctxt, record, typing, outer_mode, &block);
+        }
         ExprX::OpenInvariant(inv, binder, body, atomicity) => {
             if outer_mode == Mode::Spec {
                 return Err(error(&expr.span, "Cannot open invariant in Spec mode."));

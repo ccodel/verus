@@ -703,6 +703,11 @@ fn visit_exp(ctx: &Ctx, state: &mut State, exp: &Exp) -> Exp {
         }
         ExpX::Interp(_) => panic!("unexpected ExpX::Interp"),
         ExpX::FuelConst(_) => exp.clone(),
+        ExpX::MatchBlock { scrutinee, body } => {
+            let scrutinee = visit_exp(ctx, state, scrutinee);
+            let body = visit_exp(ctx, state, body);
+            mk_exp(ExpX::MatchBlock { scrutinee, body })
+        }
     }
 }
 

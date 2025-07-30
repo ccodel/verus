@@ -45,8 +45,13 @@ fn test_triangle_fail() {
 */
 
 // ANCHOR: step_by_step
+<<<<<<< HEAD
 proof fn test_triangle_step_by_step() {
     assert(triangle(0) == 0) by (lean);
+=======
+fn test_triangle_step_by_step() {
+    assert(triangle(0) == 0);
+>>>>>>> match_translation
     assert(triangle(1) == 1);
     assert(triangle(2) == 3);
     assert(triangle(3) == 6);

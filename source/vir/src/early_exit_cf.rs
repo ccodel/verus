@@ -74,7 +74,8 @@ fn expr_get_early_exits_rec(
             | ExprX::ProofInSpec(..)
             | ExprX::NeverToAny { .. }
             | ExprX::Nondeterministic { .. }
-            | ExprX::Block(..) => VisitorControlFlow::Recurse,
+            | ExprX::Block(..)
+            | ExprX::MatchBlock { .. } => VisitorControlFlow::Recurse,
             ExprX::Quant(..)
             | ExprX::Closure(..)
             | ExprX::NonSpecClosure { .. }

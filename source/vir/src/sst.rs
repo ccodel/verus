@@ -96,6 +96,8 @@ pub enum ExpX {
     // only used internally by the interpreter; should never be seen outside it
     Interp(InterpExp),
     FuelConst(usize),
+    // MatchBlock wraps the simplified if-else chain but preserves original match info for Lean
+    MatchBlock { scrutinee: Exp, body: Exp },
 }
 
 #[derive(Debug, Clone, Copy, ToDebugSNode, Serialize, Deserialize)]
