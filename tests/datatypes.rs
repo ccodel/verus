@@ -34,14 +34,11 @@ proof fn spec_for_rotate_90(p: Point)
 
     // We can prove this, though
     assert(o == Point { x: -p.y, y: p.x} ==> o == rotate_90(p)) by (lean_proof as a1);
-<<<<<<< HEAD
     // Or, we can write it as this
     assert({
         let o = Point { x: -p.y, y: p.x };
         o == rotate_90(p)
     }) by (lean_proof as a2);
-=======
->>>>>>> match_translation
 }
 
 ////////////////////////////////////////////////////////////////////////////////
