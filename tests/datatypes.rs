@@ -62,11 +62,7 @@ proof fn test_beverage(bev: Beverage)
     // Simple equality between enums
     assert(Syrup::RootBeer != Syrup::Syrup) by (lean_proof as trivial_ne);
     // Equality between enums with values
-<<<<<<< HEAD
     assert(Beverage::Coffee { creamers: 0, sugar: true } != Beverage::Soda { flavor : Syrup::Cola { size: 5 } }) by (lean_proof as values_ne);
-=======
-    assert(Beverage::Coffee { creamers: 0, sugar:  true } != Beverage::Soda { flavor : Syrup::Cola { size: 5 } }) by (lean_proof as values_ne);
->>>>>>> match_translation
     // Match statements in Lean
     assert(bev is Soda ==> bev !is Coffee) by (lean_proof as is_variant);
 }
