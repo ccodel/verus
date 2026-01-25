@@ -1,6 +1,6 @@
 use crate::context::Ctx;
 use crate::ast::{
-    Typ, TypX, Typs, Datatype, DatatypeX, Dt, Fun, LeanMode, NullaryOpr, PathX, Mode, Variant, VarBinder, VarBinders,
+    Typ, TypX, Typs, Datatype, DatatypeX, Dt, Fun, LeanMode, NullaryOpr, Path, PathX, Mode, Variant, VarBinder, VarBinders,
 };
 use crate::ast_util::types_equal;
 use crate::sst::{
@@ -32,11 +32,18 @@ struct LeanCtx<'a> {
     current_fun: Option<Fun>,
     found_by_lean: bool,
     total_by_lean: u32,
+    serialize_mode: SerializeMode,
     // Mark down which definitions we've seen already
     typs: Vec<Typ>, // CC: Replace with manual hash set/map later?
     dts: HashSet<Dt>,
     fns: HashSet<Fun>,
     asserts_to_serialize: Vec<(&'a Exp, Fun, Arc<String>)>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SerializeMode {
+    ByLeanOnly,
+    WholeCrate,
 }
 
 fn start_by_lean(lctx: &mut LeanCtx) {
@@ -49,7 +56,8 @@ fn stop_by_lean(lctx: &mut LeanCtx) {
 }
 
 fn is_by_lean_active(lctx: &LeanCtx) -> bool {
-    lctx.found_by_lean
+    // Always active if mode is WholeCrate
+    lctx.found_by_lean || lctx.serialize_mode == SerializeMode::WholeCrate
 }
 
 // TODO: Don't clone, work with lifetimes to say that `LeanCtx` and `Exp` come from the same place
@@ -130,6 +138,17 @@ fn lvisit_datatype(lctx: &mut LeanCtx, datatype: &Datatype) {
             let typ = &field.a.0;
             lvisit_typ(lctx, typ);
         }
+    }
+}
+
+// Keep serialization scoped to the current module or its submodules
+fn in_module_or_submodule(owning_module: &Option<Path>, path: Option<&Path>, module: &Path) -> bool {
+    if let Some(owning_module) = owning_module {
+        owning_module.matches_prefix(module)
+    } else if let Some(path) = path {
+        path.matches_prefix(module)
+    } else {
+        false
     }
 }
 
@@ -482,6 +501,37 @@ fn lvisit_func_sst<'lctx>(lctx: &mut LeanCtx<'lctx>, sst: &'lctx FunctionSst) {
     if lctx.fns.contains(f) { return; }
     // println!("[lvisit_func_sst] Function not added yet: {:?}", f);
 
+    let saved_fun = lctx.current_fun.clone();
+
+    // If serializing the whole crate, visit all functions and their dependencies
+    if lctx.serialize_mode == SerializeMode::WholeCrate {
+        lctx.fns.insert(f.clone());
+        lctx.current_fun = Some(f.clone());
+        match sst.mode {
+            Mode::Spec => {
+                lvisit_pars(lctx, &sst.pars);
+                lvisit_par(lctx, &sst.ret);
+                if let Some(spec_axioms) = &sst.axioms.spec_axioms {
+                    if let Some(termination_check) = &spec_axioms.termination_check {
+                        lvisit_stm(lctx, &termination_check.body);
+                    }
+                    lvisit_exp(lctx, &spec_axioms.body_exp);
+                }
+            }
+            Mode::Proof | Mode::Exec => {
+                if let Some(proof) = &sst.exec_proof_check {
+                    lvisit_pars(lctx, &sst.pars);
+                    lvisit_par(lctx, &sst.ret);
+                    lvisit_exps(lctx, &proof.reqs);
+                    lvisit_exps(lctx, &proof.post_condition.ens_exps);
+                    lvisit_stm(lctx, &proof.body);
+                }
+            }
+        }
+        lctx.current_fun = saved_fun;
+        return; // skip the by_lean logic
+    }
+
     if !is_by_lean_active(lctx) {
         // Special case: spec functions marked `by (lean)`
         if sst.mode == Mode::Spec {
@@ -498,7 +548,7 @@ fn lvisit_func_sst<'lctx>(lctx: &mut LeanCtx<'lctx>, sst: &'lctx FunctionSst) {
                 sst.axioms.spec_axioms.as_ref()
                     .map(|axioms| lvisit_exp(lctx, &axioms.body_exp));
 
-                lctx.current_fun = None;
+                lctx.current_fun = saved_fun;
                 stop_by_lean(lctx);
             }
             return;
@@ -521,14 +571,14 @@ fn lvisit_func_sst<'lctx>(lctx: &mut LeanCtx<'lctx>, sst: &'lctx FunctionSst) {
             lvisit_exps(lctx, &proof.post_condition.ens_exps);
             // lvisit_stm(lctx, &proof.body); // Enforced to be empty
 
-            lctx.current_fun = None;
+            lctx.current_fun = saved_fun;
             stop_by_lean(lctx);
         } else {
             // Ignore the function's parameters and its requires/ensures
             // Instead, scan the function body to find any Lean asserts
             lctx.current_fun = Some(f.clone());
             lvisit_stm(lctx, &proof.body);
-            lctx.current_fun = None;
+            lctx.current_fun = saved_fun;
         }
     } else {
         match sst.mode {
@@ -629,25 +679,54 @@ fn compute_all_dt_deps(lctx: &LeanCtx, graph: &mut Graph<Dt>) {
 ///
 /// This is the entrypoint for Lean serialization.
 pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
+    serialize_crate_for_lean_with_mode(ctx, krate, SerializeMode::ByLeanOnly);
+}
+
+/// Serialize all functions/datatypes in the crate, regardless of `by (lean)`.
+pub fn serialize_crate_for_lean_all(ctx: &Ctx, krate: &KrateSst) {
+    serialize_crate_for_lean_with_mode(ctx, krate, SerializeMode::WholeCrate);
+}
+
+fn serialize_crate_for_lean_with_mode(ctx: &Ctx, krate: &KrateSst, mode: SerializeMode) {
     let mut lctx = LeanCtx {
         ctx,
         current_fun: None,
         found_by_lean: false,
         total_by_lean: 0,
+        serialize_mode: mode,
         typs: Vec::new(),
         dts: HashSet::new(),
         fns: HashSet::new(),
         asserts_to_serialize: Vec::new(),
     };
 
-    // Visit all of the functions to check for `by (lean)` attributes
-    for sst in krate.functions.iter() {
-        // println!("Function encountered: {:?}", (&sst.x).name);
-        lvisit_func_sst(&mut lctx, sst);
+    if mode == SerializeMode::WholeCrate {
+        let module = ctx.module_path();
+        for sst in krate.functions.iter() {
+            let fun_path = &sst.x.name.path;
+            if in_module_or_submodule(&sst.x.owning_module, Some(fun_path), &module) {
+                lvisit_func_sst(&mut lctx, sst);
+            }
+        }
+        for datatype in krate.datatypes.iter() {
+            let name_path = match &datatype.x.name {
+                Dt::Path(path) => Some(path),
+                Dt::Tuple(..) => None,
+            };
+            if in_module_or_submodule(&datatype.x.owning_module, name_path, &module) {
+                lvisit_dt(&mut lctx, &datatype.x.name);
+            }
+        }
+    } else {
+        // Visit all of the functions to check for `by (lean)` attributes
+        for sst in krate.functions.iter() {
+            // println!("Function encountered: {:?}", (&sst.x).name);
+            lvisit_func_sst(&mut lctx, sst);
+        }
     }
     
-    // Don't serialize anything if there are no `by (lean)` attributes
-    if lctx.total_by_lean == 0 { return; }
+    // Don't serialize anything if there are no `by (lean)` attributes (unless exporting all)
+    if mode == SerializeMode::ByLeanOnly && lctx.total_by_lean == 0 { return; }
 
     // The top-level JSON object is an array under the key "decls"
     let mut decls: Vec<serde_json::Value> = Vec::new();
@@ -702,13 +781,13 @@ pub fn serialize_crate_for_lean(ctx: &Ctx, krate: &KrateSst) {
             Node::Fun(f) => {
                 if nodes.len() == 1 {
                     if lctx.fns.contains(f) {
-                        decls.push(serialize_fn(ctx, f).unwrap());
+                        decls.push(serialize_fn(ctx, f, mode).unwrap());
                     }
                 } else if nodes.len() > 1 { // If the SCC has more than one node, we serialize it as a mutual block
                     let mut funs: Vec<serde_json::Value> = Vec::new();
                     for f in nodes.iter() {
                         if let Node::Fun(f) = f {
-                            if let Some(fn_val) = serialize_fn(ctx, f) {
+                            if let Some(fn_val) = serialize_fn(ctx, f, mode) {
                                 funs.push(fn_val);
                             }
                         }
@@ -787,6 +866,7 @@ const DECL_VAL: &str = "x";
 const DATATYPE_DECL: &str = "Datatype";
 const SPEC_FUN_DECL: &str = "SpecFn";
 const PROOF_FUN_DECL: &str = "ProofFn";
+const EXEC_FUN_DECL: &str = "ExecFn";
 const ASSERT_DECL: &str = "Assert";
 
 impl PathX {
@@ -806,15 +886,15 @@ fn serialize_dt(ctx: &Ctx, dt: &Dt) -> serde_json::Value {
     }
 }
 
-fn serialize_fn(ctx: &Ctx, fun: &Fun) -> Option<serde_json::Value> {
+fn serialize_fn(ctx: &Ctx, fun: &Fun, mode: SerializeMode) -> Option<serde_json::Value> {
     let Some(sst) = &ctx.func_sst_map.get(fun) else { return None };
     let sst = &sst.x;
-    if sst.mode == Mode::Exec { return None; }
+    if sst.mode == Mode::Exec && mode == SerializeMode::ByLeanOnly { return None; }
 
     let fun_type = match sst.mode {
         Mode::Spec => SPEC_FUN_DECL,
         Mode::Proof => PROOF_FUN_DECL,
-        Mode::Exec => unreachable!(),
+        Mode::Exec => EXEC_FUN_DECL,
     };
     
     Some (serde_json::json! {

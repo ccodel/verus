@@ -11,7 +11,8 @@ spec fn p(u: usize) -> bool {
 
 proof fn range_property(u: usize) by(lean)
     requires 25 <= u < 100,
-    ensures p(u);
+    ensures p(u),
+{}
 
 pub closed spec fn min(x: int, y: int) -> int {
     if x <= y {

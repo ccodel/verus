@@ -19,7 +19,7 @@ proof fn test_set()
         let nonneg = Set::new(|i: int| i >= 0);
         let pos1 = nonneg.filter(|i: int| i > 0);
         let pos2 = nonneg.map(|i: int| i + 1);
-        forall|i: int| nonneg.contains(i) == (i >= 0)
+        forall|i: int| nonneg.contains(i) == (i >= 0) &&
         forall|i: int| pos1.contains(i) == (i > 0) &&
         forall|i: int| pos2.contains(i) == (i > 0) &&
         pos1 === pos2

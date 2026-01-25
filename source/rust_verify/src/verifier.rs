@@ -48,7 +48,7 @@ use vir::prelude::PreludeConfig;
 
 // Only serialize VCs to JSON if the Lean feature is enabled
 #[cfg(feature = "lean")]
-use vir::sst_to_lean::serialize_crate_for_lean;
+use vir::sst_to_lean::{serialize_crate_for_lean, serialize_crate_for_lean_all};
 
 const RLIMIT_PER_SECOND: f32 = 3000000f32;
 
@@ -2016,13 +2016,21 @@ impl Verifier {
         }
         let krate_sst = vir::poly::poly_krate_for_module(&mut ctx, &krate_sst);
 
+        // Export crate code to a JSON serialization for Lean/Strata translation.
+        // When --export-lean-all is set, serialize before verification so errors don't block output.
+        #[cfg(feature = "lean")]
+        if self.args.export_lean_all {
+            serialize_crate_for_lean_all(&ctx, &krate_sst);
+        }
+
         let VerifyBucketOut { time_smt_init, time_smt_run, rlimit_count } =
             self.verify_bucket(reporter, &krate_sst, source_map, bucket_id, &mut ctx)?;
 
-        // Export crate code to a JSON serialization for Lean
-        // This function only produces a serialization if the file contains a `by (lean)`
+        // Default behavior: only serialize when the file contains `by (lean)`.
         #[cfg(feature = "lean")]
-        serialize_crate_for_lean(&ctx, &krate_sst);
+        if !self.args.export_lean_all {
+            serialize_crate_for_lean(&ctx, &krate_sst);
+        }
 
         global_ctx = ctx.free();
 
