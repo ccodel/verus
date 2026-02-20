@@ -817,9 +817,7 @@ fn serialize_crate_for_lean_with_mode(ctx: &Ctx, krate: &KrateSst, mode: Seriali
     this_thread_stop_skipping_nonlean_fields();
 
     let module_name = ctx.module_path().to_str();
-    let path = std::env::current_dir().unwrap().join(
-        format!("serialized_{}.json", module_name)
-    );
+    let path = std::env::current_dir().unwrap().join(format!("{}.json", module_name));
 
     let mut file = std::fs::OpenOptions::new()
         .create(true)
