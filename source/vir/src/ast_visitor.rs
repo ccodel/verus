@@ -559,6 +559,35 @@ pub(crate) trait AstVisitor<R: Returner, Err, Scope: Scoper> {
                 let arms = self.visit_arms(arms)?;
                 R::ret(|| expr_new(ExprX::Match(R::get(place), R::get_vec_a(arms))))
             }
+            ExprX::MatchBlock { match_expr, pattern_expr, arm_decls, arm_body } => {
+                let match_expr_v = self.visit_expr(match_expr)?;
+                let pattern_expr_v = self.visit_expr(pattern_expr)?;
+                let mut scope_count = 0;
+                let arm_decls_v = R::map_vec_and_flatten(arm_decls, &mut |s| {
+                    let stmts = self.visit_stmt(s)?;
+                    for stmt in R::get_vec_or_slice(&stmts, std::array::from_ref(s)).iter() {
+                        match &stmt.x {
+                            StmtX::Expr(_) => {}
+                            StmtX::Decl { pattern, mode: _, init, els: _ } => {
+                                self.push_scope();
+                                self.insert_pattern_bindings(pattern, init.is_some());
+                                scope_count += 1;
+                            }
+                        }
+                    }
+                    Ok(stmts)
+                })?;
+                let arm_body_v = self.visit_expr(arm_body)?;
+                for _i in 0..scope_count {
+                    self.pop_scope();
+                }
+                R::ret(|| expr_new(ExprX::MatchBlock {
+                    match_expr: R::get(match_expr_v),
+                    pattern_expr: R::get(pattern_expr_v),
+                    arm_decls: R::get_vec_a(arm_decls_v),
+                    arm_body: R::get(arm_body_v),
+                }))
+            }
             ExprX::Loop {
                 loop_isolation,
                 allow_complex_invariants,
@@ -1194,6 +1223,7 @@ pub(crate) trait AstVisitor<R: Returner, Err, Scope: Scoper> {
             user_defined_invariant_fn,
             sized_constraint,
             destructor,
+            ..
         } = &datatype.x;
         let type_bounds = self.visit_generic_bounds(typ_bounds)?;
         let variants = self.visit_variants(variants)?;
@@ -1201,6 +1231,8 @@ pub(crate) trait AstVisitor<R: Returner, Err, Scope: Scoper> {
         R::ret(|| {
             datatype.new_x(DatatypeX {
                 name: name.clone(),
+                #[cfg(feature = "lean")]
+                dt_type: datatype.x.dt_type.clone(),
                 proxy: proxy.clone(),
                 owning_module: owning_module.clone(),
                 visibility: visibility.clone(),

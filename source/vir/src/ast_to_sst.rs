@@ -2470,7 +2470,7 @@ pub(crate) fn expr_to_stm_opt(
                 mode: mode.clone(),
             });
 
-            let ret = ReturnValue::ImplicitUnit(expr.span.clone());
+            let ret = Maybe::Some(Value::ImplicitUnit(expr.span.clone()));
             Ok((vec![block, theorem_body], ret))
         }
         ExprX::If(expr0, expr1, None) => {
@@ -2897,10 +2897,10 @@ pub(crate) fn expr_to_stm_opt(
         }
         ExprX::MatchBlock { match_expr, pattern_expr: _, arm_decls, arm_body } => {
             let (_, match_ret) = expr_to_stm_opt(ctx, state, match_expr)?;
-            let match_exp = match match_ret.to_value() {
-                Some(exp) => exp,
-                None => {
-                    return Ok((vec![], ReturnValue::Never));
+            let match_exp = match match_ret {
+                Maybe::Some(v) => v.to_exp(),
+                Maybe::Never => {
+                    return Ok((vec![], Maybe::Never));
                 }
             };
             
@@ -2910,14 +2910,15 @@ pub(crate) fn expr_to_stm_opt(
             let block = SpannedTyped::new(&expr.span, &expr.typ, block_expr);
             let (stms, block_ret) = expr_to_stm_opt(ctx, state, &block)?;
             
-            match block_ret.to_value() {
-                Some(simplified_body) => {
+            match block_ret {
+                Maybe::Some(block_val) => {
+                    let simplified_body = block_val.to_exp();
                     // Check if we should create a MatchBlock wrapper
                     let expr_typ_str = format!("{:?}", &expr.typ);
                     if expr_typ_str.contains("TypParam") || expr_typ_str.contains("RwLockToks") {
                         // For types with type parameters or known problematic types,
                         // just return the simplified body directly
-                        Ok((stms, ReturnValue::Some(simplified_body)))
+                        Ok((stms, Maybe::Some(Value::Exp(simplified_body))))
                     } else {
                         // Create SST MatchBlock wrapper
                         let match_block = ExpX::MatchBlock {
@@ -2925,11 +2926,11 @@ pub(crate) fn expr_to_stm_opt(
                             simplified_body,
                         };
                         let match_block_exp = SpannedTyped::new(&expr.span, &expr.typ, match_block);
-                        Ok((stms, ReturnValue::Some(match_block_exp)))
+                        Ok((stms, Maybe::Some(Value::Exp(match_block_exp))))
                     }
                 }
-                None => {
-                    Ok((stms, ReturnValue::Never))
+                Maybe::Never => {
+                    Ok((stms, Maybe::Never))
                 }
             }
         }

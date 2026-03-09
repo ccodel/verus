@@ -276,6 +276,8 @@ fn outer_reason_by_expr_kind(e: &Expr) -> Option<OuterProphReason> {
             | ExprX::BorrowMut(..)
             | ExprX::TwoPhaseBorrowMut(..)
             | ExprX::Old(..)
+            | ExprX::AssertLean { .. }
+            | ExprX::MatchBlock { .. }
         => None,
         ExprX::NonSpecClosure { .. } => Some(OuterProphReason::NonSpecClosure),
         ExprX::Loop { .. } => Some(OuterProphReason::Loop),
@@ -2702,20 +2704,10 @@ fn check_expr_handle_mut_arg(
                 return Err(error(&expr.span, "cannot use assert in exec mode"));
             }
             for req in requires.iter() {
-                check_expr_has_mode(ctxt, record, typing, Mode::Spec, req, Mode::Spec)?;
+                check_expr_has_mode(ctxt, record, typing, Mode::Spec, req, Mode::Spec, outer_proph)?;
             }
-            check_expr_has_mode(ctxt, record, typing, Mode::Spec, body, Mode::Spec)?;
-            Ok(Mode::Proof)
-        }
-        ExprX::AssertLean { requires, body, mode: _ } => {
-            if ctxt.check_ghost_blocks && typing.block_ghostness == Ghost::Exec {
-                return Err(error(&expr.span, "cannot use assert in exec mode"));
-            }
-            for req in requires.iter() {
-                check_expr_has_mode(ctxt, record, typing, Mode::Spec, req, Mode::Spec)?;
-            }
-            check_expr_has_mode(ctxt, record, typing, Mode::Spec, body, Mode::Spec)?;
-            Ok(Mode::Proof)
+            check_expr_has_mode(ctxt, record, typing, Mode::Spec, body, Mode::Spec, outer_proph)?;
+            Ok((Mode::Proof, Proph::No))
         }
         ExprX::If(e1, e2, e3) => {
             let condition_expect = match typing.block_ghostness {
@@ -3068,7 +3060,7 @@ fn check_expr_handle_mut_arg(
         ExprX::MatchBlock { arm_decls, arm_body, .. } => {
             let block_base = ExprX::Block(arm_decls.clone(), Some(arm_body.clone()));
             let block = crate::ast::SpannedTyped::new(&expr.span, &expr.typ, block_base);
-            return check_expr_handle_mut_arg( ctxt, record, typing, outer_mode, &block);
+            return check_expr_handle_mut_arg(ctxt, record, typing, outer_mode, expect, &block, outer_proph);
         }
         ExprX::OpenInvariant(inv, binder, body, atomicity) => {
             if outer_mode == Mode::Spec {

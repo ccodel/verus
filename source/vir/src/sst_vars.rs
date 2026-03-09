@@ -89,6 +89,7 @@ pub(crate) fn stm_get_mutations_shallow(stm: &Stm, m: &mut HashMap<VarIdent, Spa
         | StmX::Loop { .. }
         | StmX::OpenInvariant(..)
         | StmX::ClosureInner { .. }
+        | StmX::AssertLean { .. }
         | StmX::Air(..)
         | StmX::Block(..) => {}
     }
@@ -337,6 +338,7 @@ fn stm_mutations(param_typs: &[(VarIdent, Typ)], mutations: &mut HavocSet, stm: 
         | StmX::RevealString(_)
         | StmX::Return { .. }
         | StmX::BreakOrContinue { .. }
+        | StmX::AssertLean { .. }
         | StmX::Air(_) => stm.clone(),
         StmX::Call { dest, .. } => {
             if let Some(Dest { is_init: false, dest }) = dest {

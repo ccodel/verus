@@ -1339,8 +1339,8 @@ fn verus_item_to_vir<'tcx, 'a>(
                     // Use `expr_to_vir` and `vir::headers::read_header` to extract the requires
                     // Third argument (for `lean_proof` only) is theorem name
 
-                    let exp = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?;
-                    let mut header_vir_expr = expr_to_vir(bctx, &args[1], ExprModifier::REGULAR)?;
+                    let exp = expr_to_vir(bctx, &args[0], ExprModifier::REGULAR)?.to_spec_expr(bctx);
+                    let mut header_vir_expr = expr_to_vir(bctx, &args[1], ExprModifier::REGULAR)?.to_spec_expr(bctx);
                     let header = vir::headers::read_header(
                         &mut header_vir_expr,
                         &vir::headers::HeaderAllows::Some(vec![vir::headers::HeaderAllow::Require, vir::headers::HeaderAllow::Ensure]),
@@ -1359,7 +1359,7 @@ fn verus_item_to_vir<'tcx, 'a>(
 
                     mk_expr(ExprX::AssertLean {
                         requires,
-                        body: exp.clone(),
+                        body: exp,
                         mode,
                     })
                 }

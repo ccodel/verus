@@ -438,7 +438,7 @@ fn req_ens_to_air(
         for (default_ensures, exp) in specs.iter() {
             let expr_ctxt = if is_singular {
                 // CC: Or here?
-                ExprCtxt::new_mode_singular(ExprMode::Spec)
+                ExprCtxt::new_mode_singular(ExprMode::Spec, is_singular)
             } else {
                 ExprCtxt::new_mode(ExprMode::Spec)
             };
@@ -943,7 +943,7 @@ pub fn func_axioms_to_air(
                     SpannedTyped::new(&span, &Arc::new(TypX::Bool), forallx);
                 // TODO: Mark a lean thing here?
                 let expr_ctxt = if is_singular {
-                    ExprCtxt::new_mode_singular(ExprMode::Spec)
+                    ExprCtxt::new_mode_singular(ExprMode::Spec, is_singular)
                 } else {
                     ExprCtxt::new_mode(ExprMode::Spec)
                 };
