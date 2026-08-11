@@ -21,6 +21,7 @@ yansi = { workspace = true }
 [features]
 record-history = [] # for convenience only; inert at the moment
 singular = ["vir/singular", "air/singular"]
+sst-json = ["vir/sst-json"]
 
 [package.metadata.rust-analyzer]
 rustc_private = true
