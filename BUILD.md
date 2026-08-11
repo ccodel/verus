@@ -131,6 +131,58 @@ Now you're ready to write some Verus! Check out [our guide](https://verus-lang.g
 Note that while `vargo` needs to be run from the `source` directory, the `verus` binary can be run (directly, or via a symlink) from any
 directory, which is useful when verifying and compiling a project elsewhere on your file-system.
 
+# Experimental SST JSON export (optional, feature `sst-json`)
+
+Verus can serialize a dependency-closed, translation-oriented projection of a
+verification bucket's SST function contracts, check bodies, and datatype
+declarations to JSON. This interface is experimental and is disabled by default.
+Build it with
+
+```
+vargo build --release --features sst-json
+```
+
+Pass `--export-sst-json DIR` to serialize the current module's SST declarations.
+`DIR` must already exist. A crate with multiple verification buckets may write
+one file per bucket. Module buckets use `<module>.json`; function-level
+spinoff buckets use `<module>__function__<function>.json`. Path-component
+characters that could collide with separators are percent-encoded:
+
+```
+./target-verus/release/verus --export-sst-json path/to/export path/to/input.rs
+```
+
+The top-level object identifies the experimental wire format:
+
+```json
+{
+  "format": "verus-sst",
+  "format_version": 1,
+  "krate": "input",
+  "decls": []
+}
+```
+
+`krate` is the logical name of the crate being exported, not the encoded bucket
+filename. The crate's compiler-stable ID is intentionally omitted; consumers
+combining exports from multiple builds must namespace those inputs themselves.
+
+`decls` contains dependency-ordered function and datatype declarations. Each
+declaration is an explicit recursive projection of the SST fields needed by
+translation backends; it is not a serialization of Verus's internal Rust data
+structures. Source spans, diagnostics, and unrelated verification metadata are
+intentionally omitted, so output does not depend on the source directory.
+
+Consumers should reject unsupported `format` or `format_version` values. A
+breaking representation change requires a new `format_version`; fields may be
+added compatibly while the interface remains experimental.
+
+Current limitations: the projection does not include top-level trait declarations
+or other non-function call-graph nodes. Resolved trait-method functions and the
+types referenced by trait bounds are still included when reachable. Logical
+atomicity is not supported; exporting a check body that uses its loop encoding
+reports an error rather than emitting an incomplete projection.
+
 # IDE Support
 
 Once you have built Verus, you can use it in IDE clients (such as Visual Studio

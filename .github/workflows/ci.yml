@@ -239,7 +239,7 @@ jobs:
   smoke-test:
     strategy:
       matrix:
-        features: [record-history, no-std, no-alloc, singular]
+        features: [record-history, no-std, no-alloc, singular, sst-json]
 
     runs-on: macos-14
 
@@ -283,6 +283,11 @@ jobs:
             "record-history")
               cargo build --features record-history
               cargo run -p cargo-verus -- build --manifest-path vstd/Cargo.toml
+              ;;
+            "sst-json")
+              cargo build --features sst-json
+              cargo run -p cargo-verus -- build --manifest-path vstd/Cargo.toml
+              cargo nextest run -p rust_verify_test --features sst-json --test sst_json
               ;;
             "no-std")
               cargo build
