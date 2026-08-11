@@ -19,6 +19,10 @@ use vir::ast::{
 use vir::ast_util::ident_binder;
 use vir::def::field_ident_from_rust;
 
+// Preserve source datatype kinds for SST JSON consumers.
+#[cfg(feature = "sst-json")]
+use vir::ast::DtType;
+
 // The `rustc_hir::VariantData` is optional here because we won't have it available
 // when handling external datatype definitions.
 // Therefore, we need to get most of the information from rustc_middle.
@@ -185,6 +189,8 @@ pub(crate) fn check_item_struct<'tcx>(
     let mode = get_mode(Mode::Exec, attrs);
     let datatype = DatatypeX {
         name: Dt::Path(path),
+        #[cfg(feature = "sst-json")]
+        dt_type: DtType::Struct,
         proxy: None,
         visibility,
         owning_module: Some(module_path.clone()),
@@ -275,6 +281,8 @@ pub(crate) fn check_item_enum<'tcx>(
         span,
         DatatypeX {
             name: Dt::Path(path),
+            #[cfg(feature = "sst-json")]
+            dt_type: DtType::Enum,
             proxy: None,
             visibility,
             owning_module: Some(module_path.clone()),
@@ -376,6 +384,8 @@ pub(crate) fn check_item_union<'tcx>(
         span,
         DatatypeX {
             name: Dt::Path(path),
+            #[cfg(feature = "sst-json")]
+            dt_type: DtType::Union,
             proxy: None,
             visibility,
             owning_module: Some(module_path.clone()),
@@ -669,6 +679,8 @@ pub(crate) fn check_item_external<'tcx>(
         let visibility = external_item_visibility;
         let datatype = DatatypeX {
             name: Dt::Path(path),
+            #[cfg(feature = "sst-json")]
+            dt_type: DtType::External,
             proxy,
             visibility,
             owning_module,
@@ -707,6 +719,8 @@ pub(crate) fn check_item_external<'tcx>(
         let visibility = external_item_visibility;
         let datatype = DatatypeX {
             name: Dt::Path(path),
+            #[cfg(feature = "sst-json")]
+            dt_type: DtType::Struct,
             proxy,
             visibility,
             owning_module,
@@ -758,6 +772,8 @@ pub(crate) fn check_item_external<'tcx>(
 
         let datatype = DatatypeX {
             name: Dt::Path(path),
+            #[cfg(feature = "sst-json")]
+            dt_type: DtType::Enum,
             proxy,
             visibility,
             owning_module,

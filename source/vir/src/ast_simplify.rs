@@ -44,6 +44,10 @@ struct ClosureDatatype {
     path: Path,
 }
 
+// Preserve the source datatype kind for SST JSON consumers.
+#[cfg(feature = "sst-json")]
+use crate::ast::DtType;
+
 struct State {
     // Counter to generate temporary variables
     next_var: u64,
@@ -1440,6 +1444,8 @@ pub fn simplify_krate(ctx: &mut GlobalCtx, krate: &Krate) -> Result<Krate, VirEr
         let variants = Arc::new(vec![variant]);
         let datatypex = DatatypeX {
             name: Dt::Tuple(arity),
+            #[cfg(feature = "sst-json")]
+            dt_type: DtType::Tuple,
             proxy: None,
             visibility,
             owning_module: None,
@@ -1511,6 +1517,8 @@ pub fn simplify_krate(ctx: &mut GlobalCtx, krate: &Krate) -> Result<Krate, VirEr
         );
         let datatypex = DatatypeX {
             name: Dt::Path(closure.path.clone()),
+            #[cfg(feature = "sst-json")]
+            dt_type: DtType::Closure,
             proxy: None,
             visibility,
             owning_module: None,

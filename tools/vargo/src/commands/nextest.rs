@@ -44,7 +44,7 @@ impl VargoNextestRun {
     fn apply_feature_filter(&mut self) {
         if self.package.as_str() == "rust_verify_test" {
             self.feature_options
-                .filter_feature_list(&[VerusFeatures::Singular]);
+                .filter_feature_list(&[VerusFeatures::Singular, VerusFeatures::SstJson]);
         }
     }
 }

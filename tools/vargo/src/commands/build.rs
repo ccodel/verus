@@ -105,7 +105,7 @@ impl VargoBuild {
         match self.package.as_deref() {
             Some("rust_verify") => {
                 self.feature_options
-                    .filter_feature_list(&[VerusFeatures::Singular]);
+                    .filter_feature_list(&[VerusFeatures::Singular, VerusFeatures::SstJson]);
             }
             Some("verus") => {
                 self.feature_options

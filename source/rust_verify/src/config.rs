@@ -77,6 +77,7 @@ pub enum Vstd {
 #[derive(Debug)]
 pub struct ArgsX {
     pub export: Option<String>,
+    pub export_sst_json: Option<String>,
     pub import: Vec<(String, String)>,
     pub verify_root: bool,
     pub verify_module: Vec<String>,
@@ -124,6 +125,7 @@ impl ArgsX {
     pub fn new() -> Self {
         Self {
             export: Default::default(),
+            export_sst_json: Default::default(),
             import: Default::default(),
             verify_root: Default::default(),
             verify_module: Default::default(),
@@ -301,6 +303,7 @@ pub fn parse_args_with_imports(
 ) -> (Args, Vec<String>) {
     const OPT_EXPORT: &str = "export";
     const OPT_IMPORT: &str = "import";
+    const OPT_EXPORT_SST_JSON: &str = "export-sst-json";
     const OPT_VERIFY_ROOT: &str = "verify-root";
     const OPT_VERIFY_MODULE: &str = "verify-module";
     const OPT_VERIFY_ONLY_MODULE: &str = "verify-only-module";
@@ -449,6 +452,12 @@ pub fn parse_args_with_imports(
         "Print version information (add `--output-json` to print as json) ",
     );
     opts.optopt("", OPT_EXPORT, "Export Verus metadata for library crate", "CRATENAME=PATH");
+    opts.optopt(
+        "",
+        OPT_EXPORT_SST_JSON,
+        "Export the current module's SST declarations as experimental JSON into DIR",
+        "DIR",
+    );
     opts.optmulti("", OPT_IMPORT, "Import Verus metadata from library crate", "CRATENAME=PATH");
     opts.optflag("", OPT_VERIFY_ROOT, "Verify just the root module of crate");
     opts.optmulti(
@@ -657,6 +666,7 @@ pub fn parse_args_with_imports(
     let args = ArgsX {
         verify_root: matches.opt_present(OPT_VERIFY_ROOT),
         export: matches.opt_str(OPT_EXPORT),
+        export_sst_json: matches.opt_str(OPT_EXPORT_SST_JSON),
         import: import,
         verify_module: matches.opt_strs(OPT_VERIFY_MODULE),
         verify_only_module: matches.opt_strs(OPT_VERIFY_ONLY_MODULE),

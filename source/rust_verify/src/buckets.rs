@@ -1,4 +1,8 @@
 use std::collections::{HashMap, HashSet};
+#[cfg(feature = "sst-json")]
+use std::fmt::Write as _;
+#[cfg(feature = "sst-json")]
+use vir::ast::CrateId;
 use vir::{
     ast::{Fun, Krate, Path},
     ast_util::fun_as_friendly_rust_name,
@@ -74,6 +78,48 @@ impl BucketId {
             BucketId::Fun(_, f) => Some(f),
         }
     }
+
+    /// Return an injective, filesystem-safe stem for this current-crate verification bucket.
+    #[cfg(feature = "sst-json")]
+    pub fn sst_json_file_stem(&self) -> String {
+        let module_stem = path_to_encoded_file_stem(self.module());
+        match self {
+            BucketId::Module(_) => module_stem,
+            BucketId::Fun(_, fun) => {
+                format!("{module_stem}__function__{}", path_to_encoded_file_stem(&fun.path))
+            }
+        }
+    }
+}
+
+#[cfg(feature = "sst-json")]
+fn path_to_encoded_file_stem(path: &Path) -> String {
+    fn encode_component(component: &str) -> String {
+        let mut encoded = String::new();
+        for byte in component.bytes() {
+            if byte.is_ascii_alphanumeric() || byte == b'-' {
+                encoded.push(byte as char);
+            } else {
+                write!(&mut encoded, "%{byte:02X}").expect("writing to String cannot fail");
+            }
+        }
+        encoded
+    }
+
+    let krate = match &path.krate {
+        CrateId::Internal => None,
+        CrateId::Core => Some("core"),
+        CrateId::Alloc => Some("alloc"),
+        CrateId::Vstd => Some("vstd"),
+        CrateId::Id(name, _) => Some(name.as_str()),
+    };
+    let stem = krate
+        .into_iter()
+        .chain(path.segments.iter().map(|segment| segment.as_ref().as_str()))
+        .map(encode_component)
+        .collect::<Vec<_>>()
+        .join("_");
+    if stem.is_empty() { "root".to_string() } else { stem }
 }
 
 impl Bucket {
@@ -88,8 +134,14 @@ impl Bucket {
 pub fn get_buckets(
     krate: &Krate,
     modules_to_verify: &Vec<vir::ast::Module>,
+    include_empty_module_buckets: bool,
 ) -> Vec<(BucketId, Bucket)> {
     let mut map: HashMap<BucketId, Vec<Fun>> = HashMap::new();
+    if include_empty_module_buckets {
+        for module in modules_to_verify {
+            map.entry(BucketId::Module(module.x.path.clone())).or_default();
+        }
+    }
     let module_set: HashSet<&Path> = modules_to_verify.iter().map(|m| &m.x.path).collect();
     for func in &krate.functions {
         if let Some(owning_module) = &func.x.owning_module {

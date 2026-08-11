@@ -45,6 +45,9 @@ use vir::ast_util::{fun_as_friendly_rust_name, is_visible_to};
 use vir::def::{CommandContext, CommandsWithContext, CommandsWithContextX, SnapPos};
 use vir::prelude::PreludeConfig;
 
+#[cfg(feature = "sst-json")]
+use vir::sst_to_json::serialize_crate_to_json;
+
 const RLIMIT_PER_SECOND: f32 = 3000000f32;
 
 #[derive(Clone, Hash, PartialEq, Eq)]
@@ -1962,6 +1965,19 @@ impl Verifier {
         }
         let krate_sst = vir::poly::poly_krate_for_module(&mut ctx, &krate_sst);
 
+        // Export before verification so downstream tools can inspect obligations that Verus rejects.
+        #[cfg(feature = "sst-json")]
+        if let Some(output_dir) = &self.args.export_sst_json {
+            let file_stem = bucket_id.sst_json_file_stem();
+            serialize_crate_to_json(&ctx, &krate_sst, output_dir.as_ref(), &file_stem)?;
+        }
+        #[cfg(not(feature = "sst-json"))]
+        if self.args.export_sst_json.is_some() {
+            return Err(vir::messages::error_bare(
+                "SST JSON export requires building Verus with `--features sst-json`".to_string(),
+            ));
+        }
+
         let VerifyBucketOut { time_smt_init, time_smt_run, rlimit_count } =
             self.verify_bucket(reporter, &krate_sst, source_map, bucket_id, &mut ctx)?;
 
@@ -2070,7 +2086,11 @@ impl Verifier {
                 .expect("current_crate_module_ids should be initialized");
             user_filter.filter_modules(current_crate_module_ids)?
         };
-        let buckets = crate::buckets::get_buckets(&krate, &modules_to_verify);
+        let buckets = crate::buckets::get_buckets(
+            &krate,
+            &modules_to_verify,
+            self.args.export_sst_json.is_some(),
+        );
         let buckets = user_filter.filter_buckets(buckets);
         let bucket_ids: Vec<BucketId> = buckets.iter().map(|p| p.0.clone()).collect();
         self.buckets = buckets.into_iter().collect();

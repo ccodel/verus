@@ -1762,10 +1762,28 @@ pub struct FunWithVis {
     pub fun: Fun,
 }
 
+// The lowered shape does not always determine the original datatype form. A
+// struct becomes a single variant named after the struct itself, so an enum
+// whose only variant shares the type's name (`enum B { B { .. } }`) lowers to
+// the same shape as `struct B`. Track the original form only when SST JSON
+// export needs it.
+#[derive(Clone, Debug, Serialize, Deserialize, ToDebugSNode, Hash, PartialEq, Eq)]
+#[cfg(feature = "sst-json")]
+pub enum DtType {
+    Struct,
+    Enum,
+    Union,
+    Tuple,    // `n`-arity products. The arity is stored in `Dt`
+    Closure,  // See the note in `simplify_crate()` in vir/src/ast_simplify.rs
+    External, // external types (e.g. std/alloc types via external_type_specification)
+}
+
 /// struct or enum
 #[derive(Clone, Debug, Serialize, Deserialize, ToDebugSNode)]
 pub struct DatatypeX {
     pub name: Dt,
+    #[cfg(feature = "sst-json")]
+    pub dt_type: DtType,
     /// Similar to FunctionX proxy field.
     /// If this datatype is declared via a proxy (a type labeled external_type_specification)
     /// then this points to the proxy.

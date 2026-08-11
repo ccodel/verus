@@ -1283,6 +1283,7 @@ pub(crate) trait AstVisitor<R: Returner, Err, Scope: Scoper> {
             user_defined_invariant_fn,
             sized_constraint,
             destructor,
+            ..
         } = &datatype.x;
         let type_bounds = self.visit_generic_bounds(typ_bounds)?;
         let variants = self.visit_variants(variants)?;
@@ -1290,6 +1291,8 @@ pub(crate) trait AstVisitor<R: Returner, Err, Scope: Scoper> {
         R::ret(|| {
             datatype.new_x(DatatypeX {
                 name: name.clone(),
+                #[cfg(feature = "sst-json")]
+                dt_type: datatype.x.dt_type.clone(),
                 proxy: proxy.clone(),
                 owning_module: owning_module.clone(),
                 visibility: visibility.clone(),
